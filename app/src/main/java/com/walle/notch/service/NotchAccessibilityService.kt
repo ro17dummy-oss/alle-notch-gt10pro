@@ -6,6 +6,8 @@ import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.PixelFormat
 import android.view.Gravity
+import android.view.MotionEvent
+import android.view.View
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import androidx.compose.runtime.collectAsState
@@ -64,6 +66,20 @@ class NotchAccessibilityService : AccessibilityService() {
         systemMonitor = SystemMonitorManager(applicationContext).also { it.start() }
         attachOverlayWindow()
         observeCalibrationOffsets()
+        observeNotchHidden()
+        IslandRepository.restartEveIdleCountdown()
+    }
+
+    // Sembunyikan jendela overlay sepenuhnya (bukan sekadar compose 0dp) agar tidak bergeser/terlihat
+    private fun observeNotchHidden() {
+        serviceScope.launch {
+            IslandRepository.uiState
+                .map { it.isNotchHidden }
+                .distinctUntilChanged()
+                .collect { hidden ->
+                    composeView?.visibility = if (hidden) View.GONE else View.VISIBLE
+                }
+        }
     }
 
     private fun detectInstalledLaunchers() {
@@ -97,6 +113,7 @@ class NotchAccessibilityService : AccessibilityService() {
             WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
                 WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT
@@ -111,6 +128,13 @@ class NotchAccessibilityService : AccessibilityService() {
             setViewTreeLifecycleOwner(owner)
             setViewTreeViewModelStoreOwner(owner)
             setViewTreeSavedStateRegistryOwner(owner)
+            // Sentuhan di luar notch (home screen disentuh/scroll) -> EVE bangun lalu blackout
+            setOnTouchListener { _, ev ->
+                if (ev.actionMasked == MotionEvent.ACTION_OUTSIDE) {
+                    IslandRepository.onScreenTouched()
+                }
+                false
+            }
             setContent {
                 WallENotchTheme {
                     val state by IslandRepository.uiState.collectAsState()
@@ -177,14 +201,6 @@ class NotchAccessibilityService : AccessibilityService() {
         if (event == null) return
 
         when (event.eventType) {
-            AccessibilityEvent.TYPE_VIEW_CLICKED,
-            AccessibilityEvent.TYPE_VIEW_SCROLLED -> {
-                // Sentuhan / scroll layar pengguna: bangunkan EVE jika sedang tidur lalu sembunyikan ke blackout
-                if (!_uiStateAppOpen()) {
-                    IslandRepository.onScreenTouched()
-                }
-            }
-
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
             AccessibilityEvent.TYPE_WINDOWS_CHANGED -> {
                 val pkg = event.packageName?.toString() ?: return
@@ -211,8 +227,6 @@ class NotchAccessibilityService : AccessibilityService() {
             }
         }
     }
-
-    private fun _uiStateAppOpen(): Boolean = IslandRepository.uiState.value.isAppOpen
 
     override fun onInterrupt() {
     }

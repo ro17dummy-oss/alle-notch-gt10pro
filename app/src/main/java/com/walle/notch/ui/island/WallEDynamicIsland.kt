@@ -1,6 +1,7 @@
 package com.walle.notch.ui.island
 
 import android.view.HapticFeedbackConstants
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -69,6 +70,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.walle.notch.core.model.EveIdlePhase
@@ -120,11 +122,7 @@ fun WallEDynamicIslandOverlay(
     // 1. Hilang sepenuhnya jika layar horizontal
     // 2. Hilang ketika membuka Aplikasi saat mode Standby IDLE (muncul jika ada event Dynamic Island: musik/notif/cas)
     // 3. Hilang ketika gulir menu atas/bawah (status bar / notification shade)
-    val isCompletelyHidden = (cal.hideWhenHorizontal && state.isLandscapeHorizontal) ||
-        (cal.hideWhenAppOpen && state.isAppOpen && state.mode == IslandMode.IDLE && !state.isExpanded) ||
-        (cal.hideWhenMenuScrolled && state.isNotificationShadeOpen && !state.isExpanded)
-
-    if (isCompletelyHidden) {
+    if (state.isNotchHidden) {
         Box(modifier = Modifier.size(0.dp))
         return
     }
@@ -398,44 +396,39 @@ private fun IdleModuleContent(state: IslandUiState) {
             label = "sleepBreathingAlpha"
         )
 
-        // Animasi lirik mata realistis sebelum tidur (PRE_SLEEP_LOOK)
-        val lookOffsetXDp by animateDpAsState(
-            targetValue = when (state.eveIdlePhase) {
-                EveIdlePhase.PRE_SLEEP_LOOK -> (-4).dp
-                else -> 0.dp
-            },
-            animationSpec = tween(durationMillis = 650, easing = FastOutSlowInEasing),
-            label = "lookOffsetXDp"
-        )
+        // Lirik realistis sebelum tidur: kiri -> tahan -> kanan -> tahan -> tengah -> kedip mengantuk (~2.2s)
+        val lookX = remember { Animatable(0f) }
+        val drowsy = remember { Animatable(1f) }
+        LaunchedEffect(state.eveIdlePhase) {
+            if (state.eveIdlePhase == EveIdlePhase.PRE_SLEEP_LOOK) {
+                lookX.animateTo(-4f, tween(300, easing = FastOutSlowInEasing))
+                delay(430)
+                lookX.animateTo(4f, tween(400, easing = FastOutSlowInEasing))
+                delay(430)
+                lookX.animateTo(0f, tween(250, easing = FastOutSlowInEasing))
+                drowsy.animateTo(0.15f, tween(130))
+                drowsy.animateTo(0.6f, tween(100))
+                drowsy.animateTo(0.15f, tween(150))
+            } else {
+                lookX.snapTo(0f)
+                drowsy.snapTo(1f)
+            }
+        }
 
-        // Animasi ritme ZZZ lincah tema Wall-E (Cyan & Amber, siklus 1.2s)
-        val zzzAlpha1 by infinite.animateFloat(
+        // zZZ siklus 1.2s, tiap huruf muncul bergantian (Cyan, Amber, Sky Blue)
+        val zPhase by infinite.animateFloat(
             initialValue = 0f,
             targetValue = 1f,
             animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 600, delayMillis = 0, easing = FastOutSlowInEasing),
-                repeatMode = RepeatMode.Reverse
+                animation = tween(durationMillis = 1200, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
             ),
-            label = "z1"
+            label = "zPhase"
         )
-        val zzzAlpha2 by infinite.animateFloat(
-            initialValue = 0f,
-            targetValue = 1f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 600, delayMillis = 200, easing = FastOutSlowInEasing),
-                repeatMode = RepeatMode.Reverse
-            ),
-            label = "z2"
-        )
-        val zzzAlpha3 by infinite.animateFloat(
-            initialValue = 0f,
-            targetValue = 1f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 600, delayMillis = 400, easing = FastOutSlowInEasing),
-                repeatMode = RepeatMode.Reverse
-            ),
-            label = "z3"
-        )
+        fun zAlpha(index: Int): Float {
+            val local = ((zPhase - index * 0.28f) % 1f + 1f) % 1f
+            return if (local < 0.28f) local / 0.28f else 1f - (local - 0.28f) / 0.72f
+        }
 
         Row(
             modifier = Modifier
@@ -448,13 +441,13 @@ private fun IdleModuleContent(state: IslandUiState) {
             Row(
                 modifier = Modifier
                     .weight(1f)
-                    .offset(x = lookOffsetXDp),
+                    .offset { IntOffset(lookX.value.dp.roundToPx(), 0) },
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.End
             ) {
                 EveStandbyEyeRenderer(
                     phase = state.eveIdlePhase,
-                    blinkScaleY = eyeScaleY,
+                    blinkScaleY = if (state.eveIdlePhase == EveIdlePhase.PRE_SLEEP_LOOK) drowsy.value else eyeScaleY,
                     breathingAlpha = breathingAlpha,
                     isLeft = true
                 )
@@ -468,14 +461,14 @@ private fun IdleModuleContent(state: IslandUiState) {
             Row(
                 modifier = Modifier
                     .weight(1f)
-                    .offset(x = lookOffsetXDp),
+                    .offset { IntOffset(lookX.value.dp.roundToPx(), 0) },
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Start
             ) {
                 Spacer(modifier = Modifier.width(6.dp))
                 EveStandbyEyeRenderer(
                     phase = state.eveIdlePhase,
-                    blinkScaleY = eyeScaleY,
+                    blinkScaleY = if (state.eveIdlePhase == EveIdlePhase.PRE_SLEEP_LOOK) drowsy.value else eyeScaleY,
                     breathingAlpha = breathingAlpha,
                     isLeft = false
                 )
@@ -489,21 +482,21 @@ private fun IdleModuleContent(state: IslandUiState) {
                     ) {
                         Text(
                             text = "z",
-                            color = EveCyanGlow.copy(alpha = zzzAlpha1),
+                            color = EveCyanGlow.copy(alpha = zAlpha(0)),
                             fontSize = 8.sp,
                             fontWeight = FontWeight.Bold,
                             fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
                         )
                         Text(
                             text = "Z",
-                            color = WallESolarAmber.copy(alpha = zzzAlpha2),
+                            color = WallESolarAmber.copy(alpha = zAlpha(1)),
                             fontSize = 9.5.sp,
                             fontWeight = FontWeight.ExtraBold,
                             fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
                         )
                         Text(
                             text = "Z",
-                            color = EveCyanGlow.copy(alpha = zzzAlpha3),
+                            color = Color(0xFF38BDF8).copy(alpha = zAlpha(2)),
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Black,
                             fontStyle = androidx.compose.ui.text.font.FontStyle.Italic

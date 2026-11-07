@@ -115,4 +115,10 @@ data class IslandUiState(
     val isOverlayServiceRunning: Boolean = false,
     val isNotificationListenerConnected: Boolean = false,
     val lastFeedbackMessage: String? = null
-)
+) {
+    /** Notch disembunyikan total: landscape, buka aplikasi saat standby, atau shade ditarik. */
+    val isNotchHidden: Boolean
+        get() = (calibration.hideWhenHorizontal && isLandscapeHorizontal) ||
+            (calibration.hideWhenAppOpen && isAppOpen && mode == IslandMode.IDLE && !isExpanded) ||
+            (calibration.hideWhenMenuScrolled && isNotificationShadeOpen && !isExpanded)
+}
