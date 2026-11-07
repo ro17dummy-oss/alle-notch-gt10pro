@@ -1,6 +1,8 @@
 package com.walle.notch.service
 
 import android.accessibilityservice.AccessibilityService
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.PixelFormat
 import android.view.Gravity
@@ -39,14 +41,40 @@ class NotchAccessibilityService : AccessibilityService() {
     private var systemMonitor: SystemMonitorManager? = null
     private val serviceScope = CoroutineScope(Dispatchers.Main + Job())
 
+    private val launcherPackages = mutableSetOf(
+        "com.transsion.hilauncher",
+        "com.transsion.XOSLauncher",
+        "com.android.launcher",
+        "com.android.launcher3",
+        "com.google.android.apps.nexuslauncher",
+        "com.sec.android.app.launcher",
+        "com.miui.home"
+    )
+
     override fun onServiceConnected() {
         super.onServiceConnected()
         IslandRepository.loadCalibration(applicationContext)
         IslandRepository.setOverlayServiceRunning(true)
 
+        val isLandscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+        IslandRepository.setLandscapeHorizontal(isLandscape)
+
+        detectInstalledLaunchers()
+
         systemMonitor = SystemMonitorManager(applicationContext).also { it.start() }
         attachOverlayWindow()
         observeCalibrationOffsets()
+    }
+
+    private fun detectInstalledLaunchers() {
+        try {
+            val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+            val resolves = packageManager.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)
+            for (r in resolves) {
+                r.activityInfo?.packageName?.let { launcherPackages.add(it) }
+            }
+        } catch (_: Exception) {
+        }
     }
 
     private fun attachOverlayWindow() {
@@ -75,7 +103,7 @@ class NotchAccessibilityService : AccessibilityService() {
         ).apply {
             gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
             x = (cal.offsetXDp * density).toInt()
-            y = (cal.offsetYDp * density).toInt()
+            y = 0
         }
         layoutParams = params
 
@@ -106,15 +134,15 @@ class NotchAccessibilityService : AccessibilityService() {
     private fun observeCalibrationOffsets() {
         serviceScope.launch {
             IslandRepository.uiState
-                .map { it.calibration.offsetXDp to it.calibration.offsetYDp }
+                .map { it.calibration.offsetXDp }
                 .distinctUntilChanged()
-                .collect { (offsetXDp, offsetYDp) ->
+                .collect { offsetXDp ->
                     val wm = windowManager ?: return@collect
                     val view = composeView ?: return@collect
                     val lp = layoutParams ?: return@collect
                     val density = resources.displayMetrics.density
                     lp.x = (offsetXDp * density).toInt()
-                    lp.y = (offsetYDp * density).toInt()
+                    lp.y = 0
                     try {
                         wm.updateViewLayout(view, lp)
                     } catch (_: Exception) {
@@ -142,11 +170,38 @@ class NotchAccessibilityService : AccessibilityService() {
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         val isLandscape = newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE
-        IslandRepository.setLandscapeFullscreen(isLandscape)
+        IslandRepository.setLandscapeHorizontal(isLandscape)
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        // Window state events can be inspected here if needed
+        if (event == null) return
+
+        when (event.eventType) {
+            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
+            AccessibilityEvent.TYPE_WINDOWS_CHANGED -> {
+                val pkg = event.packageName?.toString() ?: return
+                val className = event.className?.toString().orEmpty()
+
+                val isLauncher = launcherPackages.contains(pkg)
+                val isSystemUi = pkg == "com.android.systemui"
+                val isSelf = pkg == packageName
+
+                // Check if notification shade / quick settings panel is opened or scrolling
+                val isShade = isSystemUi && (
+                    className.contains("Notification", true) ||
+                    className.contains("Panel", true) ||
+                    className.contains("Shade", true) ||
+                    className.contains("QuickSettings", true) ||
+                    className.contains("StatusBar", true)
+                )
+
+                // App is open when it's not home launcher, not systemui, and not our own app
+                val isApp = !isLauncher && !isSystemUi && !isSelf
+
+                IslandRepository.setAppOpen(isApp)
+                IslandRepository.setNotificationShadeOpen(isShade)
+            }
+        }
     }
 
     override fun onInterrupt() {
@@ -178,14 +233,9 @@ private class OverlayLifecycleOwner :
     private val store = ViewModelStore()
     private val savedStateController = SavedStateRegistryController.create(this)
 
-    override val lifecycle: Lifecycle
-        get() = lifecycleRegistry
-
-    override val viewModelStore: ViewModelStore
-        get() = store
-
-    override val savedStateRegistry: SavedStateRegistry
-        get() = savedStateController.savedStateRegistry
+    override val lifecycle: Lifecycle get() = lifecycleRegistry
+    override val viewModelStore: ViewModelStore get() = store
+    override val savedStateRegistry: SavedStateRegistry get() = savedStateController.savedStateRegistry
 
     fun onCreate() {
         savedStateController.performRestore(null)

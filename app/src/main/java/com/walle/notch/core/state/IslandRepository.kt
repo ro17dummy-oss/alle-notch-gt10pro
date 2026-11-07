@@ -38,6 +38,9 @@ object IslandRepository {
             cornerWidthDp = prefs.getInt("cornerWidthDp", 30),
             cameraHoleSizeDp = prefs.getInt("cameraHoleSizeDp", 23),
             cameraTopOffsetDp = prefs.getInt("cameraTopOffsetDp", 6),
+            hideWhenAppOpen = prefs.getBoolean("hideWhenAppOpen", true),
+            hideWhenMenuScrolled = prefs.getBoolean("hideWhenMenuScrolled", true),
+            hideWhenHorizontal = prefs.getBoolean("hideWhenHorizontal", true),
             splitPillEnabled = prefs.getBoolean("splitPillEnabled", true),
             autoHideLandscape = prefs.getBoolean("autoHideLandscape", true),
             xrayCameraGuide = prefs.getBoolean("xrayCameraGuide", false)
@@ -64,6 +67,9 @@ object IslandRepository {
             .putInt("cornerWidthDp", updated.cornerWidthDp)
             .putInt("cameraHoleSizeDp", updated.cameraHoleSizeDp)
             .putInt("cameraTopOffsetDp", updated.cameraTopOffsetDp)
+            .putBoolean("hideWhenAppOpen", updated.hideWhenAppOpen)
+            .putBoolean("hideWhenMenuScrolled", updated.hideWhenMenuScrolled)
+            .putBoolean("hideWhenHorizontal", updated.hideWhenHorizontal)
             .putBoolean("splitPillEnabled", updated.splitPillEnabled)
             .putBoolean("autoHideLandscape", updated.autoHideLandscape)
             .putBoolean("xrayCameraGuide", updated.xrayCameraGuide)
@@ -85,6 +91,18 @@ object IslandRepository {
         setEveMood(context, moods[nextIndex])
     }
 
+    fun setAppOpen(isApp: Boolean) {
+        _uiState.update { it.copy(isAppOpen = isApp) }
+    }
+
+    fun setNotificationShadeOpen(isShade: Boolean) {
+        _uiState.update { it.copy(isNotificationShadeOpen = isShade) }
+    }
+
+    fun setLandscapeHorizontal(isHorizontal: Boolean) {
+        _uiState.update { it.copy(isLandscapeHorizontal = isHorizontal, isLandscapeFullscreen = isHorizontal) }
+    }
+
     fun resetCalibration(context: Context) {
         updateCalibration(context) { IslandCalibration() }
     }
@@ -99,10 +117,6 @@ object IslandRepository {
 
     fun toggleExpanded() {
         _uiState.update { it.copy(isExpanded = !it.isExpanded) }
-    }
-
-    fun setLandscapeFullscreen(isLandscape: Boolean) {
-        _uiState.update { it.copy(isLandscapeFullscreen = isLandscape) }
     }
 
     fun setOverlayServiceRunning(running: Boolean) {

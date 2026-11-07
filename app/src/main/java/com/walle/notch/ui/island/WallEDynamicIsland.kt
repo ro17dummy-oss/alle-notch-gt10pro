@@ -87,6 +87,19 @@ fun WallEDynamicIslandOverlay(
         }
     }
 
+    // Perilaku sembunyi otomatis sesuai permintaan pengguna:
+    // 1. Hilang sepenuhnya jika layar horizontal
+    // 2. Hilang ketika membuka Aplikasi (hanya tampil di Home Screen)
+    // 3. Hilang ketika gulir menu atas/bawah (status bar / notification shade)
+    val isCompletelyHidden = (cal.hideWhenHorizontal && state.isLandscapeHorizontal) ||
+        (cal.hideWhenAppOpen && state.isAppOpen && !state.isExpanded) ||
+        (cal.hideWhenMenuScrolled && state.isNotificationShadeOpen && !state.isExpanded)
+
+    if (isCompletelyHidden) {
+        Box(modifier = Modifier.size(0.dp))
+        return
+    }
+
     val isHiddenInCamera = cal.autoHideLandscape && state.isLandscapeFullscreen && !state.isExpanded
 
     val cornerWidth = if (state.isExpanded) 26.dp else cal.cornerWidthDp.dp

@@ -457,17 +457,31 @@ private fun WallESettingsScreen(state: IslandUiState) {
             }
 
             CalibrationToggleRow(
+                label = "Hilang saat membuka Aplikasi (Hanya di Home Screen)",
+                checked = cal.hideWhenAppOpen
+            ) { checked ->
+                IslandRepository.updateCalibration(context) { it.copy(hideWhenAppOpen = checked) }
+            }
+
+            CalibrationToggleRow(
+                label = "Hilang saat gulir menu atas/bawah (Panel Notif)",
+                checked = cal.hideWhenMenuScrolled
+            ) { checked ->
+                IslandRepository.updateCalibration(context) { it.copy(hideWhenMenuScrolled = checked) }
+            }
+
+            CalibrationToggleRow(
+                label = "Hilang sepenuhnya jika layar horizontal (Landscape)",
+                checked = cal.hideWhenHorizontal
+            ) { checked ->
+                IslandRepository.updateCalibration(context) { it.copy(hideWhenHorizontal = checked) }
+            }
+
+            CalibrationToggleRow(
                 label = "Tampilkan Titik Kamera Merah (X-Ray Guide)",
                 checked = cal.xrayCameraGuide
             ) { checked ->
                 IslandRepository.updateCalibration(context) { it.copy(xrayCameraGuide = checked) }
-            }
-
-            CalibrationToggleRow(
-                label = "Sembunyikan otomatis saat video Landscape",
-                checked = cal.autoHideLandscape
-            ) { checked ->
-                IslandRepository.updateCalibration(context) { it.copy(autoHideLandscape = checked) }
             }
         }
 

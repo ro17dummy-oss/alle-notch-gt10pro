@@ -29,6 +29,9 @@ data class IslandCalibration(
     val cornerWidthDp: Int = 30,       // User verified: 30dp symmetric corner curves
     val cameraHoleSizeDp: Int = 23,     // User calibrated: 23dp punch-hole size
     val cameraTopOffsetDp: Int = 6,     // User calibrated: 6dp top offset from bezel
+    val hideWhenAppOpen: Boolean = true,           // HILANG ketika membuka aplikasi
+    val hideWhenMenuScrolled: Boolean = true,      // HILANG ketika gulir menu atas/bawah
+    val hideWhenHorizontal: Boolean = true,        // HILANG SEPENUHNYA jika layar horizontal
     val splitPillEnabled: Boolean = true,
     val autoHideLandscape: Boolean = true,
     val xrayCameraGuide: Boolean = false
@@ -81,6 +84,9 @@ data class IslandUiState(
     val mode: IslandMode = IslandMode.IDLE,
     val eveMood: EveMood = EveMood.HAPPY,
     val isExpanded: Boolean = false,
+    val isAppOpen: Boolean = false,                 // Sedang membuka aplikasi (bukan di Home Screen)
+    val isNotificationShadeOpen: Boolean = false,   // Menu atas / status bar sedang digulir
+    val isLandscapeHorizontal: Boolean = false,     // Layar sedang dalam posisi horizontal / landscape
     val isLandscapeFullscreen: Boolean = false,
     val calibration: IslandCalibration = IslandCalibration(),
     val music: MusicState = MusicState(),

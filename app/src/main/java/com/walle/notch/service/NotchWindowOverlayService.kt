@@ -46,6 +46,9 @@ class NotchWindowOverlayService : Service() {
     override fun onCreate() {
         super.onCreate()
         IslandRepository.loadCalibration(applicationContext)
+        val isLandscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+        IslandRepository.setLandscapeHorizontal(isLandscape)
+
         startForegroundNotification()
 
         systemMonitor = SystemMonitorManager(applicationContext).also { it.start() }
@@ -118,7 +121,6 @@ class NotchWindowOverlayService : Service() {
             setViewTreeViewModelStoreOwner(owner)
             setViewTreeSavedStateRegistryOwner(owner)
 
-            // Auto-detect hardware DisplayCutout to automatically lock onto the Infinix GT 10 Pro camera hole!
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 setOnApplyWindowInsetsListener { _, insets ->
                     val cutout = insets.displayCutout
@@ -129,8 +131,8 @@ class NotchWindowOverlayService : Service() {
                             val topOffset = (rect.top / density).roundToInt()
                             IslandRepository.updateCalibration(applicationContext) { prev ->
                                 prev.copy(
-                                    cameraHoleSizeDp = if (holeSize in 10..26) holeSize else 16,
-                                    cameraTopOffsetDp = if (topOffset in 0..16) topOffset else 5
+                                    cameraHoleSizeDp = if (holeSize in 10..28) holeSize else 23,
+                                    cameraTopOffsetDp = if (topOffset in 0..16) topOffset else 6
                                 )
                             }
                         }
@@ -178,7 +180,7 @@ class NotchWindowOverlayService : Service() {
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         val isLandscape = newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE
-        IslandRepository.setLandscapeFullscreen(isLandscape)
+        IslandRepository.setLandscapeHorizontal(isLandscape)
     }
 
     override fun onDestroy() {
