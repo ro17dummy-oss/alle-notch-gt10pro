@@ -4,6 +4,7 @@ import android.view.HapticFeedbackConstants
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.keyframes
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
@@ -52,12 +53,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -136,19 +140,54 @@ fun WallEDynamicIslandOverlay(
     )
 
     val isHiddenInCamera = cal.autoHideLandscape && state.isLandscapeFullscreen && !state.isExpanded
+    val isAppPeek = state.isAppPeek
 
-    val cornerWidth = cal.cornerWidthDp.dp
-    val targetBottomRadius = if (state.isExpanded) {
-        28.dp
-    } else {
-        (cal.cornerWidthDp * 0.64f).dp
+    val notifPkg = state.notification?.packageName.orEmpty().lowercase()
+    val appNeonColor = remember(notifPkg) {
+        when {
+            notifPkg.contains("whatsapp") -> Color(0xFF25D366)
+            notifPkg.contains("telegram") -> Color(0xFF0088CC)
+            notifPkg.contains("instagram") -> Color(0xFFE1306C)
+            notifPkg.contains("gmail") -> Color(0xFFEA4335)
+            notifPkg.contains("youtube") -> Color(0xFFFF0000)
+            notifPkg.contains("twitter") || notifPkg.contains("x.android") -> Color(0xFFF8FAFC)
+            else -> Color(0xFF25D366)
+        }
+    }
+
+    val neonTransition = rememberInfiniteTransition(label = "livingNeon")
+    val neonPulse by neonTransition.animateFloat(
+        initialValue = 0.45f,
+        targetValue = 0.95f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1800, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "neonPulse"
+    )
+    val beamOffset by neonTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2800, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "beamOffset"
+    )
+
+    val cornerWidth = if (isAppPeek) 4.dp else cal.cornerWidthDp.dp
+    val targetBottomRadius = when {
+        isAppPeek -> 3.dp
+        state.isExpanded -> 28.dp
+        else -> (cal.cornerWidthDp * 0.64f).dp
     }
 
     val targetTotalWidth: Dp = when {
         isHiddenInCamera -> cal.cameraHoleSizeDp.dp
+        isAppPeek -> 64.dp
         state.isExpanded -> when (state.mode) {
-            IslandMode.IDLE -> 280.dp          // Giant EVE Visor: proporsional seperti collapse versi besar
-            IslandMode.MUSIC -> 318.dp         // Nusa-style sleek music player (lebar lega)
+            IslandMode.IDLE -> 280.dp          // Giant EVE Visor
+            IslandMode.MUSIC -> 318.dp         // Nusa-style sleek music player
             IslandMode.SOLAR_CHARGE -> 296.dp  // Sleek solar charge visor
             IslandMode.NOTIFICATION -> 320.dp  // Clean quick reply card
             IslandMode.CALL_TIMER -> 300.dp
@@ -157,18 +196,19 @@ fun WallEDynamicIslandOverlay(
             IslandMode.IDLE -> cal.idleWidthDp.dp
             IslandMode.MUSIC -> 248.dp
             IslandMode.SOLAR_CHARGE -> 232.dp
-            IslandMode.NOTIFICATION -> 248.dp
+            IslandMode.NOTIFICATION -> cal.idleWidthDp.dp // Tetap di ukuran biasa 202dp!
             IslandMode.CALL_TIMER -> 244.dp
         }
     }
 
     val targetHeight: Dp = when {
         isHiddenInCamera -> cal.cameraHoleSizeDp.dp
+        isAppPeek -> 4.dp
         state.isExpanded -> when (state.mode) {
-            IslandMode.IDLE -> 92.dp           // Giant EVE Visor: ramping, bersih, fokus ke mata EVE besar
-            IslandMode.MUSIC -> 148.dp         // Tinggi cukup agar tombol bawah & judul tidak kepotong
+            IslandMode.IDLE -> 92.dp           // Giant EVE Visor
+            IslandMode.MUSIC -> 148.dp
             IslandMode.SOLAR_CHARGE -> 114.dp
-            IslandMode.NOTIFICATION -> 152.dp
+            IslandMode.NOTIFICATION -> 110.dp  // Tinggi pas untuk balas cepat tanpa mubazir
             IslandMode.CALL_TIMER -> 124.dp
         }
         else -> cal.idleHeightDp.dp
@@ -202,7 +242,12 @@ fun WallEDynamicIslandOverlay(
     )
 
     val animatedHorizontalPad by animateDpAsState(
-        targetValue = if (state.isExpanded) 24.dp else cornerWidth,
+        targetValue = when {
+            isAppPeek -> 0.dp
+            state.isExpanded -> 24.dp
+            state.mode == IslandMode.NOTIFICATION -> 10.dp
+            else -> cornerWidth
+        },
         animationSpec = spring(
             dampingRatio = 0.74f,
             stiffness = Spring.StiffnessMediumLow
@@ -234,7 +279,8 @@ fun WallEDynamicIslandOverlay(
             )
             .clip(notchShape)
             .background(PitchBlack)
-            .pointerInput(state.isExpanded, state.mode) {
+            .pointerInput(state.isExpanded, state.mode, isAppPeek) {
+                if (isAppPeek) return@pointerInput
                 var totalDragY = 0f
                 detectVerticalDragGestures(
                     onDragStart = { totalDragY = 0f },
@@ -257,6 +303,7 @@ fun WallEDynamicIslandOverlay(
             .combinedClickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
+                enabled = !isAppPeek,
                 onClick = {
                     try {
                         view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
@@ -283,8 +330,48 @@ fun WallEDynamicIslandOverlay(
             ),
         contentAlignment = Alignment.TopCenter
     ) {
-        // Garis kontur kurva bawah halus (Bottom Squircle Rim Highlight) saat di-expand
-        if (state.isExpanded) {
+        // Garis tepi neon 'hidup' saat notifikasi aktif (Compact maupun Expanded)
+        if (state.mode == IslandMode.NOTIFICATION && !isAppPeek) {
+            Canvas(
+                modifier = Modifier.fillMaxSize()
+            ) {
+                val rimPath = LiquidNotchShape.buildLiquidNotchPath(
+                    size = size,
+                    density = this,
+                    cornerWidth = cornerWidth,
+                    bottomCornerRadius = animatedBottomRadius
+                )
+                // 1. Halo aura luar berdenyut napas halus
+                drawPath(
+                    path = rimPath,
+                    color = appNeonColor.copy(alpha = 0.35f * neonPulse),
+                    style = Stroke(width = 3.8.dp.toPx(), cap = StrokeCap.Round)
+                )
+                // 2. Garis inti neon tajam
+                drawPath(
+                    path = rimPath,
+                    color = appNeonColor.copy(alpha = 0.85f * neonPulse),
+                    style = Stroke(width = 1.8.dp.toPx(), cap = StrokeCap.Round)
+                )
+                // 3. Aliran laser cahaya berjalan mengitari keliling notch
+                val sweepCenter = Offset(size.width / 2f, size.height * 0.35f)
+                drawPath(
+                    path = rimPath,
+                    brush = Brush.sweepGradient(
+                        0.0f to Color.Transparent,
+                        (beamOffset - 0.2f).coerceIn(0f, 1f) to Color.Transparent,
+                        beamOffset to Color.White.copy(alpha = 0.9f),
+                        (beamOffset + 0.2f).coerceIn(0f, 1f) to appNeonColor.copy(alpha = 0.8f),
+                        1.0f to Color.Transparent,
+                        center = sweepCenter
+                    ),
+                    style = Stroke(width = 2.0.dp.toPx(), cap = StrokeCap.Round)
+                )
+            }
+        }
+
+        // Garis kontur kurva bawah halus (Bottom Squircle Rim Highlight) saat di-expand selain notif
+        if (state.isExpanded && state.mode != IslandMode.NOTIFICATION) {
             Canvas(
                 modifier = Modifier.fillMaxSize()
             ) {
@@ -307,7 +394,7 @@ fun WallEDynamicIslandOverlay(
             }
         }
 
-        if (!isHiddenInCamera) {
+        if (!isHiddenInCamera && !isAppPeek) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -1438,6 +1525,263 @@ private fun SolarChargeModuleContent(state: IslandUiState) {
     }
 }
 
+/**
+ * Komponen Ikon Resmi Aplikasi (Official Vector SVGs)
+ * Menampilkan ikon asli WhatsApp, Telegram, Instagram, Gmail, YouTube, X, dll.
+ */
+@Composable
+private fun AuthenticAppIcon(
+    packageName: String,
+    modifier: Modifier = Modifier,
+    sizeDp: Dp = 18.dp
+) {
+    val pkg = packageName.lowercase()
+    Box(
+        modifier = modifier
+            .size(sizeDp)
+            .clip(RoundedCornerShape(sizeDp * 0.28f)),
+        contentAlignment = Alignment.Center
+    ) {
+        when {
+            pkg.contains("whatsapp") -> {
+                // WhatsApp Official Vector Glyph
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    drawRect(Color(0xFF25D366))
+                    val cx = size.width / 2f
+                    val cy = size.height / 2f
+                    val r = size.minDimension * 0.38f
+                    // Speech bubble base
+                    drawCircle(Color.White, radius = r, center = Offset(cx, cy))
+                    // Bubble pointer tail
+                    val tailPath = Path().apply {
+                        moveTo(cx - r * 0.7f, cy + r * 0.45f)
+                        lineTo(cx - r * 1.05f, cy + r * 0.95f)
+                        lineTo(cx - r * 0.35f, cy + r * 0.75f)
+                        close()
+                    }
+                    drawPath(tailPath, Color.White)
+                    // Inner phone symbol
+                    drawCircle(Color(0xFF25D366), radius = r * 0.52f, center = Offset(cx, cy))
+                    drawCircle(Color.White, radius = r * 0.22f, center = Offset(cx, cy))
+                }
+            }
+            pkg.contains("telegram") -> {
+                // Telegram Sky Cyan with White Paper Airplane
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    drawCircle(Color(0xFF0088CC))
+                    val p = Path().apply {
+                        moveTo(size.width * 0.22f, size.height * 0.50f)
+                        lineTo(size.width * 0.78f, size.height * 0.28f)
+                        lineTo(size.width * 0.62f, size.height * 0.74f)
+                        lineTo(size.width * 0.48f, size.height * 0.58f)
+                        close()
+                    }
+                    drawPath(p, Color.White)
+                }
+            }
+            pkg.contains("instagram") -> {
+                // Instagram Sunset Gradient with Camera Glyph
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    drawRect(
+                        brush = Brush.linearGradient(
+                            listOf(Color(0xFFFFD521), Color(0xFFF50000), Color(0xFFB900B4), Color(0xFF7000FF))
+                        )
+                    )
+                    val pad = size.width * 0.22f
+                    drawRoundRect(
+                        color = Color.White,
+                        topLeft = Offset(pad, pad),
+                        size = Size(size.width - 2 * pad, size.height - 2 * pad),
+                        cornerRadius = CornerRadius(size.width * 0.14f),
+                        style = Stroke(width = 1.3.dp.toPx())
+                    )
+                    drawCircle(
+                        color = Color.White,
+                        radius = size.width * 0.13f,
+                        center = Offset(size.width / 2f, size.height / 2f),
+                        style = Stroke(width = 1.1.dp.toPx())
+                    )
+                    drawCircle(
+                        color = Color.White,
+                        radius = size.width * 0.035f,
+                        center = Offset(size.width * 0.68f, size.height * 0.32f)
+                    )
+                }
+            }
+            pkg.contains("gmail") -> {
+                // Gmail Clean Envelope
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    drawRect(Color.White)
+                    val p = Path().apply {
+                        moveTo(size.width * 0.18f, size.height * 0.28f)
+                        lineTo(size.width * 0.50f, size.height * 0.52f)
+                        lineTo(size.width * 0.82f, size.height * 0.28f)
+                    }
+                    drawPath(p, Color(0xFFEA4335), style = Stroke(width = 1.6.dp.toPx(), cap = StrokeCap.Round))
+                    drawRoundRect(
+                        color = Color(0xFFEA4335),
+                        topLeft = Offset(size.width * 0.16f, size.height * 0.26f),
+                        size = Size(size.width * 0.68f, size.height * 0.48f),
+                        cornerRadius = CornerRadius(2.dp.toPx()),
+                        style = Stroke(width = 1.3.dp.toPx())
+                    )
+                }
+            }
+            pkg.contains("youtube") -> {
+                // YouTube Hyper Red with Play Triangle
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    drawRoundRect(
+                        color = Color(0xFFFF0000),
+                        cornerRadius = CornerRadius(size.width * 0.24f)
+                    )
+                    val p = Path().apply {
+                        moveTo(size.width * 0.38f, size.height * 0.32f)
+                        lineTo(size.width * 0.68f, size.height * 0.50f)
+                        lineTo(size.width * 0.38f, size.height * 0.68f)
+                        close()
+                    }
+                    drawPath(p, Color.White)
+                }
+            }
+            pkg.contains("twitter") || pkg.contains("x.android") -> {
+                // X Pure Black with Sleek White Cross
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    drawRect(Color.Black)
+                    drawLine(
+                        color = Color.White,
+                        start = Offset(size.width * 0.25f, size.height * 0.25f),
+                        end = Offset(size.width * 0.75f, size.height * 0.75f),
+                        strokeWidth = 1.6.dp.toPx(),
+                        cap = StrokeCap.Round
+                    )
+                    drawLine(
+                        color = Color.White,
+                        start = Offset(size.width * 0.75f, size.height * 0.25f),
+                        end = Offset(size.width * 0.25f, size.height * 0.75f),
+                        strokeWidth = 1.6.dp.toPx(),
+                        cap = StrokeCap.Round
+                    )
+                }
+            }
+            else -> {
+                // Default Messenger Badge
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color(0xFF25D366)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "💬",
+                        fontSize = (sizeDp.value * 0.55f).sp
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Komponen Ikon Lonceng Berdering Monokrom (SVG)
+ * Dilengkapi animasi getaran (ringing chime) dan gelombang radar pudar di sekitarnya.
+ */
+@Composable
+private fun RingingBellIcon(
+    neonColor: Color,
+    modifier: Modifier = Modifier
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "bellRing")
+    val bellRotation by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 0f,
+        animationSpec = infiniteRepeatable(
+            animation = keyframes {
+                durationMillis = 1800
+                0f at 0
+                14f at 180
+                -12f at 360
+                10f at 540
+                -8f at 720
+                4f at 900
+                0f at 1080
+                0f at 1800
+            },
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "bellRotation"
+    )
+    val pingScale by infiniteTransition.animateFloat(
+        initialValue = 0.5f,
+        targetValue = 1.4f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1800, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "pingScale"
+    )
+    val pingAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.85f,
+        targetValue = 0.0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1800, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "pingAlpha"
+    )
+
+    Box(
+        modifier = modifier.size(24.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        // Lingkaran Radar Ping
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            drawCircle(
+                color = neonColor.copy(alpha = pingAlpha),
+                radius = (size.minDimension / 2f) * pingScale,
+                style = Stroke(width = 1.4.dp.toPx())
+            )
+        }
+
+        // Ikon Lonceng SVG Putih Monokrom
+        Canvas(
+            modifier = Modifier
+                .size(17.dp)
+                .rotate(bellRotation)
+        ) {
+            val w = size.width
+            val h = size.height
+
+            // Badan Lonceng
+            val bellPath = Path().apply {
+                moveTo(w * 0.44f, h * 0.12f)
+                quadraticBezierTo(w * 0.50f, h * 0.02f, w * 0.56f, h * 0.12f)
+                quadraticBezierTo(w * 0.78f, h * 0.22f, w * 0.78f, h * 0.60f)
+                quadraticBezierTo(w * 0.82f, h * 0.78f, w * 0.92f, h * 0.82f)
+                lineTo(w * 0.08f, h * 0.82f)
+                quadraticBezierTo(w * 0.18f, h * 0.78f, w * 0.18f, h * 0.60f)
+                quadraticBezierTo(w * 0.22f, h * 0.22f, w * 0.44f, h * 0.12f)
+                close()
+            }
+            drawPath(
+                path = bellPath,
+                color = Color.White,
+                style = Stroke(width = 1.8.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+            )
+
+            // Bandul Lonceng Bawah
+            val clapperPath = Path().apply {
+                moveTo(w * 0.42f, h * 0.86f)
+                quadraticBezierTo(w * 0.50f, h * 0.98f, w * 0.58f, h * 0.86f)
+            }
+            drawPath(
+                path = clapperPath,
+                color = Color.White,
+                style = Stroke(width = 1.8.dp.toPx(), cap = StrokeCap.Round)
+            )
+        }
+    }
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun NotificationModuleContent(
@@ -1446,36 +1790,39 @@ private fun NotificationModuleContent(
 ) {
     val context = LocalContext.current
     val notif = state.notification ?: NotificationPayload()
+    val notifPkg = notif.packageName.lowercase()
+    val appNeonColor = remember(notifPkg) {
+        when {
+            notifPkg.contains("whatsapp") -> Color(0xFF25D366)
+            notifPkg.contains("telegram") -> Color(0xFF0088CC)
+            notifPkg.contains("instagram") -> Color(0xFFE1306C)
+            notifPkg.contains("gmail") -> Color(0xFFEA4335)
+            notifPkg.contains("youtube") -> Color(0xFFFF0000)
+            notifPkg.contains("twitter") || notifPkg.contains("x.android") -> Color(0xFFF8FAFC)
+            else -> Color(0xFF25D366)
+        }
+    }
     var replyText by remember { mutableStateOf("") }
 
     if (!state.isExpanded) {
+        // Mode Notif Biasa (Compact 202x36dp): Sisi Kiri Ikon Asli + Sender, Sisi Kanan Lonceng SVG
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 4.dp, vertical = 2.dp),
+                .padding(horizontal = 6.dp, vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
+            // Sisi Kiri Kamera: Official App Icon + Nama Pengirim
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(5.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
                 modifier = Modifier.weight(1f)
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(18.dp)
-                        .clip(CircleShape)
-                        .background(DirectivePlantGreen),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = notif.appLabel.take(2),
-                        color = PitchBlack,
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.Black,
-                        style = TextStyle(platformStyle = PlatformTextStyle(includeFontPadding = false))
-                    )
-                }
+                AuthenticAppIcon(
+                    packageName = notif.packageName,
+                    sizeDp = 18.dp
+                )
                 Text(
                     text = notif.sender,
                     color = Color.White,
@@ -1486,25 +1833,27 @@ private fun NotificationModuleContent(
                 )
             }
 
-            Spacer(modifier = Modifier.width((state.calibration.cameraHoleSizeDp + 6).dp))
+            // Punch hole camera clearance space (23dp + margin)
+            Spacer(modifier = Modifier.width((state.calibration.cameraHoleSizeDp + 8).dp))
 
-            Text(
-                text = notif.message,
-                color = EveCyanGlow,
-                fontSize = 11.sp,
-                maxLines = 1,
-                modifier = Modifier
-                    .weight(1f)
-                    .basicMarquee()
-            )
+            // Sisi Kanan Kamera: Ikon Lonceng Berdering SVG Monokrom + Gelombang Radar
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.End,
+                modifier = Modifier.weight(1f)
+            ) {
+                RingingBellIcon(neonColor = appNeonColor)
+            }
         }
     } else {
+        // Mode Expand Balas Chat (320x110dp)
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = 10.dp, bottom = 14.dp, start = 4.dp, end = 4.dp),
+                .padding(top = 8.dp, bottom = 10.dp, start = 6.dp, end = 6.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
+            // Header Bar
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -1512,57 +1861,68 @@ private fun NotificationModuleContent(
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(7.dp),
                     modifier = Modifier.weight(1f)
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(20.dp)
-                            .clip(CircleShape)
-                            .background(DirectivePlantGreen),
-                        contentAlignment = Alignment.Center
-                    ) {
+                    AuthenticAppIcon(
+                        packageName = notif.packageName,
+                        sizeDp = 22.dp
+                    )
+                    Column {
                         Text(
-                            text = notif.appLabel.take(2),
-                            color = PitchBlack,
+                            text = notif.sender,
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = "${notif.appLabel} · Baru saja",
+                            color = Color(0xFF94A3B8),
                             fontSize = 9.5.sp,
-                            fontWeight = FontWeight.Black,
-                            style = TextStyle(platformStyle = PlatformTextStyle(includeFontPadding = false))
+                            maxLines = 1
                         )
                     }
-                    Text(
-                        text = notif.sender,
-                        color = EveCyanGlow,
-                        fontSize = 11.5.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
                 }
 
                 Spacer(modifier = Modifier.width((state.calibration.cameraHoleSizeDp + 6).dp))
 
                 Row(
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(0.5f),
                     horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    PillActionButton(text = "Tutup", bg = Color.White.copy(alpha = 0.12f), fg = Color.White) {
+                    PillActionButton(
+                        text = "✕",
+                        bg = Color.White.copy(alpha = 0.12f),
+                        fg = Color.White
+                    ) {
                         onFocusInput(false)
-                        IslandRepository.setMode(IslandMode.IDLE, expand = false)
+                        IslandRepository.dismissNotification()
                     }
                 }
             }
 
-            Text(
-                text = notif.message,
-                color = Color.White,
-                fontSize = 12.sp,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                style = TextStyle(platformStyle = PlatformTextStyle(includeFontPadding = false))
-            )
+            // Message text preview box
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color.White.copy(alpha = 0.05f))
+                    .padding(horizontal = 8.dp, vertical = 5.dp)
+            ) {
+                Text(
+                    text = notif.message,
+                    color = Color(0xFFE2E8F0),
+                    fontSize = 11.5.sp,
+                    lineHeight = 15.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
 
+            // Quick reply bar
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -1571,17 +1931,17 @@ private fun NotificationModuleContent(
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .height(30.dp)
+                        .height(28.dp)
                         .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.12f))
-                        .border(1.dp, EveCyanGlow.copy(alpha = 0.25f), CircleShape)
+                        .background(Color.White.copy(alpha = 0.10f))
+                        .border(1.dp, appNeonColor.copy(alpha = 0.35f), CircleShape)
                         .clickable { onFocusInput(true) }
-                        .padding(horizontal = 12.dp),
+                        .padding(horizontal = 10.dp),
                     contentAlignment = Alignment.CenterStart
                 ) {
                     if (replyText.isEmpty()) {
                         Text(
-                            text = "Balas pesan...",
+                            text = "Balas cepat...",
                             color = Color.White.copy(alpha = 0.45f),
                             fontSize = 11.sp,
                             style = TextStyle(platformStyle = PlatformTextStyle(includeFontPadding = false))
@@ -1599,17 +1959,21 @@ private fun NotificationModuleContent(
                             fontSize = 11.sp,
                             platformStyle = PlatformTextStyle(includeFontPadding = false)
                         ),
-                        cursorBrush = SolidColor(EveCyanGlow),
+                        cursorBrush = SolidColor(appNeonColor),
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
 
-                PillActionButton(text = "Kirim", bg = EveCyanGlow, fg = PitchBlack) {
-                    val finalMsg = replyText.ifBlank { "Siap, diterima!" }
-                    NotchNotificationListenerService.sendQuickReply(context, notif, finalMsg)
-                    replyText = ""
-                    onFocusInput(false)
-                    IslandRepository.setMode(IslandMode.IDLE, expand = false)
+                PillActionButton(
+                    text = "Kirim",
+                    bg = appNeonColor,
+                    fg = PitchBlack
+                ) {
+                    if (replyText.isNotBlank()) {
+                        onFocusInput(false)
+                        NotchNotificationListenerService.sendQuickReply(context, notif, replyText)
+                        replyText = ""
+                    }
                 }
             }
         }

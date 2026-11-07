@@ -229,7 +229,21 @@ object IslandRepository {
     }
 
     fun setExpanded(expanded: Boolean) {
+        if (expanded) {
+            transientBannerJob?.cancel()
+        }
         _uiState.update { it.copy(isExpanded = expanded) }
+    }
+
+    fun dismissNotification() {
+        transientBannerJob?.cancel()
+        _uiState.update { state ->
+            val nextMode = if (state.music.isPlaying) IslandMode.MUSIC else IslandMode.IDLE
+            state.copy(mode = nextMode, isExpanded = false)
+        }
+        if (_uiState.value.mode == IslandMode.IDLE && !_uiState.value.isAppOpen) {
+            restartEveIdleCountdown()
+        }
     }
 
     fun toggleExpanded() {
@@ -275,6 +289,9 @@ object IslandRepository {
                     val returnMode = if (state.music.isPlaying) IslandMode.MUSIC else previousMode
                     state.copy(mode = returnMode)
                 } else state
+            }
+            if (_uiState.value.mode == IslandMode.IDLE && !_uiState.value.isAppOpen) {
+                restartEveIdleCountdown()
             }
         }
     }

@@ -229,8 +229,7 @@ class NotchNotificationListenerService : NotificationListenerService() {
                     android.app.RemoteInput.addResultsToIntent(arrayOf(remoteInput), localIntent, bundle)
                     actionIntent.send(context, 0, localIntent)
                     IslandRepository.postFeedback("Balasan terkirim ke ${payload.sender}")
-                    IslandRepository.setExpanded(false)
-                    IslandRepository.setMode(IslandMode.IDLE, expand = false)
+                    IslandRepository.dismissNotification()
                     true
                 } catch (_: Exception) {
                     false
@@ -238,8 +237,7 @@ class NotchNotificationListenerService : NotificationListenerService() {
             } else {
                 // Demo/Simulated mode feedback when testing without real WA notification
                 IslandRepository.postFeedback("Simulasi balasan terkirim: \"$replyText\"")
-                IslandRepository.setExpanded(false)
-                IslandRepository.setMode(IslandMode.IDLE, expand = false)
+                IslandRepository.dismissNotification()
                 return true
             }
         }
