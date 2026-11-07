@@ -24,9 +24,11 @@ enum class EveMood {
 data class IslandCalibration(
     val offsetXDp: Int = 0,
     val offsetYDp: Int = 0,
-    val idleWidthDp: Int = 148,
+    val idleWidthDp: Int = 186,
     val idleHeightDp: Int = 36,
-    val cameraHoleSizeDp: Int = 18,
+    val cornerWidthDp: Int = 20,
+    val cameraHoleSizeDp: Int = 16,     // Infinix GT 10 Pro punch-hole cutout (~4.2mm)
+    val cameraTopOffsetDp: Int = 5,     // Distance from glass top bezel to punch-hole (~1.4mm)
     val splitPillEnabled: Boolean = true,
     val autoHideLandscape: Boolean = true,
     val xrayCameraGuide: Boolean = false

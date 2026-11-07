@@ -1,6 +1,5 @@
 package com.walle.notch.ui.island
 
-import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
@@ -11,14 +10,13 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 
 /**
- * Creates the exact liquid top-bezel notch shape matching the user reference:
- * - Concave flared ears at top-left and top-right merging seamlessly into the bezel (y = 0)
- * - Smooth convex rounded corners at bottom-left and bottom-right
- * - Fully enclosed top edge attached to the screen edge
+ * 100% Mirror-Symmetric Liquid Notch matching the reference photo:
+ * - Left S-curve: (0, 0) -> (cornerWidth, height)
+ * - Horizontal flat bottom: (cornerWidth, height) -> (width - cornerWidth, height)
+ * - Right S-curve: (width - cornerWidth, height) -> (width, 0) strictly mirrored
  */
 class LiquidNotchShape(
-    private val earRadius: Dp = 16.dp,
-    private val bottomRadius: Dp = 18.dp
+    private val cornerWidth: Dp = 20.dp
 ) : Shape {
 
     override fun createOutline(
@@ -26,49 +24,54 @@ class LiquidNotchShape(
         layoutDirection: LayoutDirection,
         density: Density
     ): Outline {
-        val rEar = with(density) { earRadius.toPx() }
-        val rBottom = with(density) { bottomRadius.toPx() }
+        val cW = with(density) { cornerWidth.toPx() }.coerceAtMost(size.width / 2f)
         val w = size.width
         val h = size.height
 
+        val earW = cW * 0.42f
+        val earH = h * 0.46f
+
+        // Left side control points (Cubic Bézier S-curve)
+        val cp1x = earW * 0.55f
+        val cp1y = 0f
+        val cp2x = earW
+        val cp2y = earH * 0.45f
+
+        val cp3x = earW
+        val cp3y = h - (h - earH) * 0.45f
+        val cp4x = cW - (cW - earW) * 0.55f
+        val cp4y = h
+
+        // Right side control points (EXACT mathematical mirror: x' = w - x)
+        val rcp3x = w - cp4x
+        val rcp3y = cp4y
+        val rcp4x = w - cp3x
+        val rcp4y = cp3y
+
+        val rcp1x = w - cp2x
+        val rcp1y = cp2y
+        val rcp2x = w - cp1x
+        val rcp2y = cp1y
+
         val path = Path().apply {
-            // Start at top-left outer ear at (0, 0)
             moveTo(0f, 0f)
 
-            // Concave curve down-right into the left vertical wall
-            quadraticBezierTo(
-                rEar * 0.95f, 0f,
-                rEar, rEar
-            )
+            // Left top flare arc
+            cubicTo(cp1x, cp1y, cp2x, cp2y, earW, earH)
 
-            // Left vertical wall down towards bottom-left corner
-            lineTo(rEar, (h - rBottom).coerceAtLeast(rEar))
+            // Left bottom roundness arc
+            cubicTo(cp3x, cp3y, cp4x, cp4y, cW, h)
 
-            // Convex curve into flat bottom
-            quadraticBezierTo(
-                rEar, h,
-                rEar + rBottom, h
-            )
+            // Flat horizontal bottom
+            lineTo(w - cW, h)
 
-            // Horizontal bottom edge
-            lineTo((w - rEar - rBottom).coerceAtLeast(rEar + rBottom), h)
+            // Right bottom roundness arc (mirrored)
+            cubicTo(rcp3x, rcp3y, rcp4x, rcp4y, w - earW, earH)
 
-            // Convex curve up into right vertical wall
-            quadraticBezierTo(
-                w - rEar, h,
-                w - rEar, (h - rBottom).coerceAtLeast(rEar)
-            )
+            // Right top flare arc (mirrored)
+            cubicTo(rcp1x, rcp1y, rcp2x, rcp2y, w, 0f)
 
-            // Right vertical wall up towards top-right ear
-            lineTo(w - rEar, rEar)
-
-            // Concave curve up-right out into top bezel
-            quadraticBezierTo(
-                w - (rEar * 0.05f), 0f,
-                w, 0f
-            )
-
-            // Close back along top edge (y = 0)
+            // Close along top bezel
             lineTo(0f, 0f)
             close()
         }

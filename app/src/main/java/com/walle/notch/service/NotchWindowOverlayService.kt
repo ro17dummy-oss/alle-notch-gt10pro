@@ -31,12 +31,8 @@ import com.walle.notch.R
 import com.walle.notch.core.state.IslandRepository
 import com.walle.notch.ui.island.WallEDynamicIslandOverlay
 import com.walle.notch.ui.theme.WallENotchTheme
+import kotlin.math.roundToInt
 
-/**
- * Standard Foreground Overlay Service using TYPE_APPLICATION_OVERLAY
- * ("Display over other apps" / SYSTEM_ALERT_WINDOW).
- * This works even if Accessibility Service is restricted by Android 13/14!
- */
 class NotchWindowOverlayService : Service() {
 
     private var windowManager: WindowManager? = null
@@ -113,7 +109,7 @@ class NotchWindowOverlayService : Service() {
         ).apply {
             gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
             x = (cal.offsetXDp * density).toInt()
-            y = 0 // Top-attached flush with bezel
+            y = 0
         }
         layoutParams = params
 
@@ -121,6 +117,28 @@ class NotchWindowOverlayService : Service() {
             setViewTreeLifecycleOwner(owner)
             setViewTreeViewModelStoreOwner(owner)
             setViewTreeSavedStateRegistryOwner(owner)
+
+            // Auto-detect hardware DisplayCutout to automatically lock onto the Infinix GT 10 Pro camera hole!
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                setOnApplyWindowInsetsListener { _, insets ->
+                    val cutout = insets.displayCutout
+                    if (cutout != null) {
+                        val rect = cutout.boundingRectTop
+                        if (!rect.isEmpty) {
+                            val holeSize = (rect.width() / density).roundToInt()
+                            val topOffset = (rect.top / density).roundToInt()
+                            IslandRepository.updateCalibration(applicationContext) { prev ->
+                                prev.copy(
+                                    cameraHoleSizeDp = if (holeSize in 10..26) holeSize else 16,
+                                    cameraTopOffsetDp = if (topOffset in 0..16) topOffset else 5
+                                )
+                            }
+                        }
+                    }
+                    insets
+                }
+            }
+
             setContent {
                 WallENotchTheme {
                     val state by IslandRepository.uiState.collectAsState()

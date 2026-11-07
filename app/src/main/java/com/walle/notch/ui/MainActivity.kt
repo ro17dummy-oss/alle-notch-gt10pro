@@ -24,6 +24,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -54,12 +56,35 @@ import com.walle.notch.ui.theme.MechaDarkSurface
 import com.walle.notch.ui.theme.PitchBlack
 import com.walle.notch.ui.theme.WallENotchTheme
 import com.walle.notch.ui.theme.WallESolarAmber
+import kotlin.math.roundToInt
 
 class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         IslandRepository.loadCalibration(applicationContext)
+
+        // Read hardware DisplayCutout directly if available
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            window.decorView.post {
+                val insets = window.decorView.rootWindowInsets
+                val cutout = insets?.displayCutout
+                if (cutout != null) {
+                    val rect = cutout.boundingRectTop
+                    if (!rect.isEmpty) {
+                        val density = resources.displayMetrics.density
+                        val holeSize = (rect.width() / density).roundToInt()
+                        val topOffset = (rect.top / density).roundToInt()
+                        IslandRepository.updateCalibration(applicationContext) { cal ->
+                            cal.copy(
+                                cameraHoleSizeDp = if (holeSize in 10..26) holeSize else 16,
+                                cameraTopOffsetDp = if (topOffset in 0..16) topOffset else 5
+                            )
+                        }
+                    }
+                }
+            }
+        }
 
         setContent {
             WallENotchTheme {
@@ -108,13 +133,13 @@ private fun WallESettingsScreen(state: IslandUiState) {
                 fontWeight = FontWeight.Bold
             )
             Text(
-                text = "Cute EVE Liquid Notch",
+                text = "Liquid Symmetric Notch",
                 color = Color.White,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold
             )
             Text(
-                text = "Lekukan halus menyatu ke bezel atas layar Infinix GT 10 Pro dengan maskot EVE interaktif yang super menggemaskan.",
+                text = "Kurva 100% simetris identik di kiri dan kanan, terkalibrasi presisi dengan punch-hole kamera depan Infinix GT 10 Pro.",
                 color = Color.White.copy(alpha = 0.72f),
                 fontSize = 13.sp
             )
@@ -137,7 +162,7 @@ private fun WallESettingsScreen(state: IslandUiState) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Preview Sentuh Wajah EVE",
+                    text = "Preview Kurva Presisi & EVE",
                     color = Color.White,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold
@@ -168,7 +193,7 @@ private fun WallESettingsScreen(state: IslandUiState) {
             }
 
             Text(
-                text = "Tip: Ketuk wajah EVE di kotak preview di atas untuk berganti ekspresi!",
+                text = "Tip: Ketuk wajah EVE di preview untuk berganti ekspresi!",
                 color = EveCyanGlow,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold
@@ -192,7 +217,6 @@ private fun WallESettingsScreen(state: IslandUiState) {
                 fontWeight = FontWeight.Bold
             )
 
-            // Method A: Standard Overlay (Bebas dari Restricted Settings!)
             PermissionRowCard(
                 title = "Opsi A: Izin Tampilkan di Atas Aplikasi Lain",
                 subtitle = "Paling mudah, tidak akan diblokir oleh 'Pengaturan Terbatas' Android 13/14",
@@ -216,7 +240,6 @@ private fun WallESettingsScreen(state: IslandUiState) {
                 }
             }
 
-            // Method B: Accessibility
             PermissionRowCard(
                 title = "Opsi B: Layanan Aksesibilitas",
                 subtitle = "Menyatu lebih dalam di atas status bar bawaan HP",
@@ -226,7 +249,6 @@ private fun WallESettingsScreen(state: IslandUiState) {
                 context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
             }
 
-            // Helper button: Direct open App Details to click the 3 dots
             Button(
                 onClick = {
                     val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
@@ -248,7 +270,6 @@ private fun WallESettingsScreen(state: IslandUiState) {
                 )
             }
 
-            // Notification Listener
             PermissionRowCard(
                 title = "Akses Notifikasi & Spotify",
                 subtitle = "Membaca lagu Spotify/YT Music dan membalas pesan WhatsApp",
@@ -324,7 +345,6 @@ private fun WallESettingsScreen(state: IslandUiState) {
                 }
             }
 
-            // Other Activities
             Text(
                 text = "Uji Aktivitas Lainnya:",
                 color = Color.White.copy(alpha = 0.8f),
@@ -381,7 +401,7 @@ private fun WallESettingsScreen(state: IslandUiState) {
             }
         }
 
-        // Section 3: Auto-Hide
+        // Section 3: Camera Calibration & Symmetry Control
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -391,15 +411,66 @@ private fun WallESettingsScreen(state: IslandUiState) {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text(
-                text = "3. Opsi Perilaku",
-                color = Color.White,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Bold
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "3. Dimensi Hardware Infinix GT 10 Pro",
+                    color = Color.White,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "Reset Hardware",
+                    color = EveCyanGlow,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.clickable {
+                        IslandRepository.resetCalibration(context)
+                    }
+                )
+            }
+
+            CalibrationSliderItem(
+                label = "Ukuran Lubang Kamera Punch-Hole",
+                valueText = "${cal.cameraHoleSizeDp} dp (~4.2mm)",
+                value = cal.cameraHoleSizeDp.toFloat(),
+                valueRange = 12f..24f
+            ) { newVal ->
+                IslandRepository.updateCalibration(context) { it.copy(cameraHoleSizeDp = newVal.roundToInt()) }
+            }
+
+            CalibrationSliderItem(
+                label = "Jarak Kamera ke Bezel Atas (Top Offset)",
+                valueText = "${cal.cameraTopOffsetDp} dp (~1.4mm)",
+                value = cal.cameraTopOffsetDp.toFloat(),
+                valueRange = 0f..14f
+            ) { newVal ->
+                IslandRepository.updateCalibration(context) { it.copy(cameraTopOffsetDp = newVal.roundToInt()) }
+            }
+
+            CalibrationSliderItem(
+                label = "Lebar Lekukan Kurva (Corner Width)",
+                valueText = "${cal.cornerWidthDp} dp (Simetris Kiri & Kanan)",
+                value = cal.cornerWidthDp.toFloat(),
+                valueRange = 14f..30f
+            ) { newVal ->
+                IslandRepository.updateCalibration(context) { it.copy(cornerWidthDp = newVal.roundToInt()) }
+            }
+
+            CalibrationSliderItem(
+                label = "Lebar Total Notch Saat Standby",
+                valueText = "${cal.idleWidthDp} dp",
+                value = cal.idleWidthDp.toFloat(),
+                valueRange = 140f..220f
+            ) { newVal ->
+                IslandRepository.updateCalibration(context) { it.copy(idleWidthDp = newVal.roundToInt()) }
+            }
 
             CalibrationToggleRow(
-                label = "Tampilkan Titik Kamera (X-Ray)",
+                label = "Tampilkan Titik Kamera Merah (X-Ray Guide)",
                 checked = cal.xrayCameraGuide
             ) { checked ->
                 IslandRepository.updateCalibration(context) { it.copy(xrayCameraGuide = checked) }
@@ -498,6 +569,41 @@ private fun ModeSelectButton(
             color = if (selected) accent else Color.White,
             fontSize = 12.sp,
             fontWeight = FontWeight.Bold
+        )
+    }
+}
+
+@Composable
+private fun CalibrationSliderItem(
+    label: String,
+    valueText: String,
+    value: Float,
+    valueRange: ClosedFloatingPointRange<Float>,
+    onValueChange: (Float) -> Unit
+) {
+    Column {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(text = label, color = Color.White, fontSize = 12.sp)
+            Text(
+                text = valueText,
+                color = WallESolarAmber,
+                fontSize = 12.sp,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold
+            )
+        }
+        Slider(
+            value = value,
+            onValueChange = onValueChange,
+            valueRange = valueRange,
+            colors = SliderDefaults.colors(
+                thumbColor = WallESolarAmber,
+                activeTrackColor = WallESolarAmber,
+                inactiveTrackColor = Color.White.copy(alpha = 0.18f)
+            )
         )
     }
 }

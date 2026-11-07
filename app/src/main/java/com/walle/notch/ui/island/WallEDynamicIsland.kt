@@ -89,33 +89,30 @@ fun WallEDynamicIslandOverlay(
 
     val isHiddenInCamera = cal.autoHideLandscape && state.isLandscapeFullscreen && !state.isExpanded
 
-    val earRadius = 18.dp
-    val bottomRadius = if (state.isExpanded) 26.dp else 18.dp
+    val cornerWidth = if (state.isExpanded) 26.dp else cal.cornerWidthDp.dp
 
-    val targetBodyWidth: Dp = when {
+    val targetTotalWidth: Dp = when {
         isHiddenInCamera -> cal.cameraHoleSizeDp.dp
-        state.isExpanded -> 320.dp
+        state.isExpanded -> 328.dp
         else -> when (state.mode) {
-            IslandMode.IDLE -> 148.dp
-            IslandMode.MUSIC -> 232.dp
-            IslandMode.SOLAR_CHARGE -> 220.dp
-            IslandMode.NOTIFICATION -> 240.dp
-            IslandMode.CALL_TIMER -> 236.dp
+            IslandMode.IDLE -> cal.idleWidthDp.dp
+            IslandMode.MUSIC -> 236.dp
+            IslandMode.SOLAR_CHARGE -> 224.dp
+            IslandMode.NOTIFICATION -> 244.dp
+            IslandMode.CALL_TIMER -> 240.dp
         }
     }
-
-    val targetTotalWidth = targetBodyWidth + (earRadius * 2)
 
     val targetHeight: Dp = when {
         isHiddenInCamera -> cal.cameraHoleSizeDp.dp
         state.isExpanded -> when (state.mode) {
-            IslandMode.IDLE -> 148.dp
+            IslandMode.IDLE -> 152.dp
             IslandMode.MUSIC -> 168.dp
             IslandMode.SOLAR_CHARGE -> 160.dp
             IslandMode.NOTIFICATION -> 176.dp
             IslandMode.CALL_TIMER -> 154.dp
         }
-        else -> 38.dp
+        else -> cal.idleHeightDp.dp
     }
 
     val animatedWidth by animateDpAsState(
@@ -136,8 +133,9 @@ fun WallEDynamicIslandOverlay(
         label = "notchHeight"
     )
 
-    val notchShape = remember(earRadius, bottomRadius) {
-        LiquidNotchShape(earRadius = earRadius, bottomRadius = bottomRadius)
+    // 100% Mirror-Symmetric Liquid Notch Shape
+    val notchShape = remember(cornerWidth) {
+        LiquidNotchShape(cornerWidth = cornerWidth)
     }
 
     Box(
@@ -155,7 +153,6 @@ fun WallEDynamicIslandOverlay(
             .combinedClickable(
                 onClick = {
                     if (state.mode == IslandMode.IDLE && !state.isExpanded) {
-                        // In Idle mode, tapping directly cycles cute expressions & haptic feedback!
                         try {
                             view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                         } catch (_: Exception) {}
@@ -173,7 +170,7 @@ fun WallEDynamicIslandOverlay(
                     IslandRepository.toggleExpanded()
                 }
             )
-            .padding(horizontal = earRadius),
+            .padding(horizontal = cornerWidth),
         contentAlignment = Alignment.TopCenter
     ) {
         if (!isHiddenInCamera) {
@@ -189,13 +186,14 @@ fun WallEDynamicIslandOverlay(
             }
         }
 
+        // Hardware-calibrated camera hole guide for Infinix GT 10 Pro
         if (cal.xrayCameraGuide) {
             Box(
                 modifier = Modifier
-                    .padding(top = 2.dp)
+                    .padding(top = cal.cameraTopOffsetDp.dp)
                     .size(cal.cameraHoleSizeDp.dp)
                     .clip(CircleShape)
-                    .background(AxiomAlertRed.copy(alpha = 0.4f))
+                    .background(AxiomAlertRed.copy(alpha = 0.45f))
             )
         }
     }
@@ -206,7 +204,6 @@ private fun IdleModuleContent(state: IslandUiState) {
     val context = LocalContext.current
     val infinite = rememberInfiniteTransition(label = "cuteAnimations")
 
-    // Blinking animation
     val eyeScaleY by infinite.animateFloat(
         initialValue = 1f,
         targetValue = 0.12f,
@@ -217,7 +214,6 @@ private fun IdleModuleContent(state: IslandUiState) {
         label = "eyeScaleY"
     )
 
-    // Soft heart/blush pulse
     val heartScale by infinite.animateFloat(
         initialValue = 1f,
         targetValue = 1.22f,
@@ -251,7 +247,6 @@ private fun IdleModuleContent(state: IslandUiState) {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                // Left Blush Cheek
                 Box(
                     modifier = Modifier
                         .size(width = 6.dp, height = 3.5.dp)
@@ -259,7 +254,6 @@ private fun IdleModuleContent(state: IslandUiState) {
                         .background(CuteBlushPink.copy(alpha = blushAlpha))
                 )
 
-                // Left Eye
                 CuteEyeRenderer(
                     mood = state.eveMood,
                     isLeft = true,
@@ -268,15 +262,14 @@ private fun IdleModuleContent(state: IslandUiState) {
                 )
             }
 
-            // Punch hole camera space in center (18dp)
-            Spacer(modifier = Modifier.width(18.dp))
+            // Punch hole camera clear area in center (calibrated to 22dp for GT 10 Pro)
+            Spacer(modifier = Modifier.width(22.dp))
 
             // Right Side: Right Eye + Soft Blush / Accessory
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                // Right Eye
                 CuteEyeRenderer(
                     mood = state.eveMood,
                     isLeft = false,
@@ -284,7 +277,6 @@ private fun IdleModuleContent(state: IslandUiState) {
                     heartScale = heartScale
                 )
 
-                // Right Accessory or Blush
                 if (state.eveMood == EveMood.PLANT) {
                     Text(
                         text = "🌱",
@@ -310,7 +302,6 @@ private fun IdleModuleContent(state: IslandUiState) {
             }
         }
     } else {
-        // Expanded: Interactive EVE Companion Dashboard
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -347,7 +338,6 @@ private fun IdleModuleContent(state: IslandUiState) {
                 }
             }
 
-            // Interactive Mood Selector Grid
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -423,7 +413,6 @@ private fun CuteEyeRenderer(
 ) {
     when (mood) {
         EveMood.HAPPY -> {
-            // Happy upward arc ^
             Canvas(modifier = Modifier.size(width = 12.dp, height = 7.dp)) {
                 val path = Path().apply {
                     moveTo(1f, size.height * 0.9f)
@@ -441,7 +430,6 @@ private fun CuteEyeRenderer(
         }
         EveMood.WINK -> {
             if (isLeft) {
-                // Normal glowing eye
                 Box(
                     modifier = Modifier
                         .size(width = 9.dp, height = 6.dp)
@@ -449,7 +437,6 @@ private fun CuteEyeRenderer(
                         .background(EveCyanGlow)
                 )
             } else {
-                // Playful wink arc ;)
                 Canvas(modifier = Modifier.size(width = 12.dp, height = 7.dp)) {
                     val path = Path().apply {
                         moveTo(1f, size.height * 0.9f)
@@ -467,7 +454,6 @@ private fun CuteEyeRenderer(
             }
         }
         EveMood.LOVE -> {
-            // Pulsing Heart Eye
             Canvas(
                 modifier = Modifier
                     .size(width = 11.dp, height = 11.dp)
@@ -487,7 +473,6 @@ private fun CuteEyeRenderer(
             }
         }
         EveMood.SLEEPY -> {
-            // Horizontal line -
             Box(
                 modifier = Modifier
                     .size(width = 10.dp, height = 2.dp)
@@ -496,7 +481,6 @@ private fun CuteEyeRenderer(
             )
         }
         EveMood.PLANT, EveMood.NORMAL -> {
-            // Expressive oval EVE eyes with blink
             Box(
                 modifier = Modifier
                     .size(width = 9.dp, height = 6.dp)

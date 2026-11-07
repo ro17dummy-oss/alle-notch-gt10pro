@@ -33,9 +33,11 @@ object IslandRepository {
         val cal = IslandCalibration(
             offsetXDp = prefs.getInt("offsetXDp", 0),
             offsetYDp = prefs.getInt("offsetYDp", 0),
-            idleWidthDp = prefs.getInt("idleWidthDp", 148),
+            idleWidthDp = prefs.getInt("idleWidthDp", 186),
             idleHeightDp = prefs.getInt("idleHeightDp", 36),
-            cameraHoleSizeDp = prefs.getInt("cameraHoleSizeDp", 18),
+            cornerWidthDp = prefs.getInt("cornerWidthDp", 20),
+            cameraHoleSizeDp = prefs.getInt("cameraHoleSizeDp", 16),
+            cameraTopOffsetDp = prefs.getInt("cameraTopOffsetDp", 5),
             splitPillEnabled = prefs.getBoolean("splitPillEnabled", true),
             autoHideLandscape = prefs.getBoolean("autoHideLandscape", true),
             xrayCameraGuide = prefs.getBoolean("xrayCameraGuide", false)
@@ -59,7 +61,9 @@ object IslandRepository {
             .putInt("offsetYDp", updated.offsetYDp)
             .putInt("idleWidthDp", updated.idleWidthDp)
             .putInt("idleHeightDp", updated.idleHeightDp)
+            .putInt("cornerWidthDp", updated.cornerWidthDp)
             .putInt("cameraHoleSizeDp", updated.cameraHoleSizeDp)
+            .putInt("cameraTopOffsetDp", updated.cameraTopOffsetDp)
             .putBoolean("splitPillEnabled", updated.splitPillEnabled)
             .putBoolean("autoHideLandscape", updated.autoHideLandscape)
             .putBoolean("xrayCameraGuide", updated.xrayCameraGuide)
