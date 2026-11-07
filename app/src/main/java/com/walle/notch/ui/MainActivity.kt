@@ -157,7 +157,7 @@ private fun WallESettingsScreen(state: IslandUiState) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(210.dp)
+                    .height(156.dp)
                     .clip(RoundedCornerShape(16.dp))
                     .background(Color(0xFF131B2B))
                     .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(16.dp))
@@ -171,9 +171,9 @@ private fun WallESettingsScreen(state: IslandUiState) {
             }
 
             Text(
-                text = "Tip: Ketuk wajah EVE di preview untuk berganti ekspresi!",
+                text = "Tip: Ketuk Notch untuk Expand (Giant EVE Visor) • Ketuk wajah EVE untuk ganti mood • Usap ke atas / ketuk luar untuk memperkecil!",
                 color = EveCyanGlow,
-                fontSize = 12.sp,
+                fontSize = 11.sp,
                 fontWeight = FontWeight.SemiBold
             )
         }
