@@ -10,14 +10,24 @@ import com.walle.notch.core.model.IslandMode
 import com.walle.notch.core.model.IslandUiState
 import com.walle.notch.core.model.MusicState
 import com.walle.notch.core.model.NotificationPayload
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 
 object IslandRepository {
 
     private const val PREFS_NAME = "walle_notch_gt10pro_prefs"
+    private const val CALIBRATION_VERSION = 2 // v2: Fixed notch 36dp height, 202dp width, 36dp corner width
+
+    private val repoScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+    private var transientBannerJob: Job? = null
 
     private val _uiState = MutableStateFlow(IslandUiState())
     val uiState: StateFlow<IslandUiState> = _uiState.asStateFlow()
@@ -30,21 +40,48 @@ object IslandRepository {
 
     fun loadCalibration(context: Context) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val cal = IslandCalibration(
-            offsetXDp = prefs.getInt("offsetXDp", 0),
-            offsetYDp = prefs.getInt("offsetYDp", 0),
-            idleWidthDp = prefs.getInt("idleWidthDp", 220),
-            idleHeightDp = prefs.getInt("idleHeightDp", 44),
-            cornerWidthDp = prefs.getInt("cornerWidthDp", 30),
-            cameraHoleSizeDp = prefs.getInt("cameraHoleSizeDp", 23),
-            cameraTopOffsetDp = prefs.getInt("cameraTopOffsetDp", 6),
-            hideWhenAppOpen = prefs.getBoolean("hideWhenAppOpen", true),
-            hideWhenMenuScrolled = prefs.getBoolean("hideWhenMenuScrolled", true),
-            hideWhenHorizontal = prefs.getBoolean("hideWhenHorizontal", true),
-            splitPillEnabled = prefs.getBoolean("splitPillEnabled", true),
-            autoHideLandscape = prefs.getBoolean("autoHideLandscape", true),
-            xrayCameraGuide = prefs.getBoolean("xrayCameraGuide", false)
-        )
+        val currentVersion = prefs.getInt("calibration_version", 1)
+
+        val cal = if (currentVersion < CALIBRATION_VERSION) {
+            val fixed = IslandCalibration(
+                idleWidthDp = 202,
+                idleHeightDp = 36,
+                cornerWidthDp = 36,
+                cameraHoleSizeDp = 23,
+                cameraTopOffsetDp = 6,
+                hideWhenAppOpen = true,
+                hideWhenMenuScrolled = true,
+                hideWhenHorizontal = true
+            )
+            prefs.edit()
+                .putInt("calibration_version", CALIBRATION_VERSION)
+                .putInt("idleWidthDp", fixed.idleWidthDp)
+                .putInt("idleHeightDp", fixed.idleHeightDp)
+                .putInt("cornerWidthDp", fixed.cornerWidthDp)
+                .putInt("cameraHoleSizeDp", fixed.cameraHoleSizeDp)
+                .putInt("cameraTopOffsetDp", fixed.cameraTopOffsetDp)
+                .putBoolean("hideWhenAppOpen", fixed.hideWhenAppOpen)
+                .putBoolean("hideWhenMenuScrolled", fixed.hideWhenMenuScrolled)
+                .putBoolean("hideWhenHorizontal", fixed.hideWhenHorizontal)
+                .apply()
+            fixed
+        } else {
+            IslandCalibration(
+                offsetXDp = prefs.getInt("offsetXDp", 0),
+                offsetYDp = prefs.getInt("offsetYDp", 0),
+                idleWidthDp = prefs.getInt("idleWidthDp", 202),
+                idleHeightDp = prefs.getInt("idleHeightDp", 36),
+                cornerWidthDp = prefs.getInt("cornerWidthDp", 36),
+                cameraHoleSizeDp = prefs.getInt("cameraHoleSizeDp", 23),
+                cameraTopOffsetDp = prefs.getInt("cameraTopOffsetDp", 6),
+                hideWhenAppOpen = prefs.getBoolean("hideWhenAppOpen", true),
+                hideWhenMenuScrolled = prefs.getBoolean("hideWhenMenuScrolled", true),
+                hideWhenHorizontal = prefs.getBoolean("hideWhenHorizontal", true),
+                splitPillEnabled = prefs.getBoolean("splitPillEnabled", true),
+                autoHideLandscape = prefs.getBoolean("autoHideLandscape", true),
+                xrayCameraGuide = prefs.getBoolean("xrayCameraGuide", false)
+            )
+        }
         val savedMoodName = prefs.getString("eveMood", EveMood.HAPPY.name)
         val mood = try {
             EveMood.valueOf(savedMoodName ?: EveMood.HAPPY.name)
@@ -132,6 +169,8 @@ object IslandRepository {
             val updatedMusic = transform(state.music)
             val nextMode = if (updatedMusic.isPlaying && state.mode == IslandMode.IDLE) {
                 IslandMode.MUSIC
+            } else if (!updatedMusic.isPlaying && state.mode == IslandMode.MUSIC) {
+                IslandMode.IDLE
             } else {
                 state.mode
             }
@@ -140,6 +179,7 @@ object IslandRepository {
     }
 
     fun postNotification(payload: NotificationPayload) {
+        val previousMode = _uiState.value.mode.let { if (it == IslandMode.NOTIFICATION) IslandMode.IDLE else it }
         _uiState.update { state ->
             state.copy(
                 notification = payload,
@@ -147,15 +187,38 @@ object IslandRepository {
                 isExpanded = false
             )
         }
+        transientBannerJob?.cancel()
+        transientBannerJob = repoScope.launch {
+            delay(4500L)
+            _uiState.update { state ->
+                if (state.mode == IslandMode.NOTIFICATION && !state.isExpanded) {
+                    val returnMode = if (state.music.isPlaying) IslandMode.MUSIC else previousMode
+                    state.copy(mode = returnMode)
+                } else state
+            }
+        }
     }
 
     fun updateBattery(telemetry: BatteryTelemetry, triggerBanner: Boolean = false) {
+        val previousMode = _uiState.value.mode.let { if (it == IslandMode.SOLAR_CHARGE) IslandMode.IDLE else it }
         _uiState.update { state ->
             state.copy(
                 battery = telemetry,
                 mode = if (triggerBanner) IslandMode.SOLAR_CHARGE else state.mode,
                 isExpanded = if (triggerBanner) false else state.isExpanded
             )
+        }
+        if (triggerBanner) {
+            transientBannerJob?.cancel()
+            transientBannerJob = repoScope.launch {
+                delay(4000L)
+                _uiState.update { state ->
+                    if (state.mode == IslandMode.SOLAR_CHARGE && !state.isExpanded) {
+                        val returnMode = if (state.music.isPlaying) IslandMode.MUSIC else previousMode
+                        state.copy(mode = returnMode)
+                    } else state
+                }
+            }
         }
     }
 

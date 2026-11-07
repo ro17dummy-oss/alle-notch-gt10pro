@@ -89,10 +89,10 @@ fun WallEDynamicIslandOverlay(
 
     // Perilaku sembunyi otomatis sesuai permintaan pengguna:
     // 1. Hilang sepenuhnya jika layar horizontal
-    // 2. Hilang ketika membuka Aplikasi (hanya tampil di Home Screen)
+    // 2. Hilang ketika membuka Aplikasi saat mode Standby IDLE (muncul jika ada event Dynamic Island: musik/notif/cas)
     // 3. Hilang ketika gulir menu atas/bawah (status bar / notification shade)
     val isCompletelyHidden = (cal.hideWhenHorizontal && state.isLandscapeHorizontal) ||
-        (cal.hideWhenAppOpen && state.isAppOpen && !state.isExpanded) ||
+        (cal.hideWhenAppOpen && state.isAppOpen && state.mode == IslandMode.IDLE && !state.isExpanded) ||
         (cal.hideWhenMenuScrolled && state.isNotificationShadeOpen && !state.isExpanded)
 
     if (isCompletelyHidden) {
@@ -600,13 +600,15 @@ private fun MusicModuleContent(state: IslandUiState) {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text(
-                    text = formatSeconds(state.callTimer.timerRemainingSec),
-                    color = WallESolarAmber,
-                    fontSize = 12.sp,
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Bold
-                )
+                if (state.callTimer.timerRunning) {
+                    Text(
+                        text = formatSeconds(state.callTimer.timerRemainingSec),
+                        color = WallESolarAmber,
+                        fontSize = 11.sp,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
                 Row(
                     verticalAlignment = Alignment.Bottom,
                     horizontalArrangement = Arrangement.spacedBy(2.5.dp),

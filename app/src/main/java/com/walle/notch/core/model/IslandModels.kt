@@ -24,9 +24,9 @@ enum class EveMood {
 data class IslandCalibration(
     val offsetXDp: Int = 0,
     val offsetYDp: Int = 0,
-    val idleWidthDp: Int = 220,         // User verified: 220dp width
-    val idleHeightDp: Int = 44,        // Height 44dp ensures 23dp camera has 15dp breathing space
-    val cornerWidthDp: Int = 30,       // User verified: 30dp symmetric corner curves
+    val idleWidthDp: Int = 202,         // User fix: 202dp width
+    val idleHeightDp: Int = 36,        // User fix: 36dp height
+    val cornerWidthDp: Int = 36,       // User fix: 36dp corner curves
     val cameraHoleSizeDp: Int = 23,     // User calibrated: 23dp punch-hole size
     val cameraTopOffsetDp: Int = 6,     // User calibrated: 6dp top offset from bezel
     val hideWhenAppOpen: Boolean = true,           // HILANG ketika membuka aplikasi

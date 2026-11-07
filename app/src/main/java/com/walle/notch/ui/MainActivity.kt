@@ -165,7 +165,7 @@ private fun WallESettingsScreen(state: IslandUiState) {
                 contentAlignment = Alignment.TopCenter
             ) {
                 WallEDynamicIslandOverlay(
-                    state = state,
+                    state = state.copy(isAppOpen = false, isLandscapeHorizontal = false, isNotificationShadeOpen = false),
                     onRequestKeyboardFocus = {}
                 )
             }
@@ -413,9 +413,9 @@ private fun WallESettingsScreen(state: IslandUiState) {
 
             CalibrationSliderItem(
                 label = "Tinggi Notch (Height)",
-                valueText = "${cal.idleHeightDp} dp (Memberi ruang napas di bawah kamera)",
+                valueText = "${cal.idleHeightDp} dp (Presisi Bezel Infinix GT 10 Pro)",
                 value = cal.idleHeightDp.toFloat(),
-                valueRange = 36f..54f
+                valueRange = 28f..54f
             ) { newVal ->
                 IslandRepository.updateCalibration(context) { it.copy(idleHeightDp = newVal.roundToInt()) }
             }
@@ -431,9 +431,9 @@ private fun WallESettingsScreen(state: IslandUiState) {
 
             CalibrationSliderItem(
                 label = "Lebar Lekukan Kurva (Corner Width)",
-                valueText = "${cal.cornerWidthDp} dp (Simetris Kiri & Kanan)",
+                valueText = "${cal.cornerWidthDp} dp (Simetris 100% Kiri & Kanan)",
                 value = cal.cornerWidthDp.toFloat(),
-                valueRange = 16f..40f
+                valueRange = 16f..46f
             ) { newVal ->
                 IslandRepository.updateCalibration(context) { it.copy(cornerWidthDp = newVal.roundToInt()) }
             }
