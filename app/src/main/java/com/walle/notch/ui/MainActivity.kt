@@ -157,7 +157,7 @@ private fun WallESettingsScreen(state: IslandUiState) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(156.dp)
+                    .height(176.dp)
                     .clip(RoundedCornerShape(16.dp))
                     .background(Color(0xFF131B2B))
                     .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(16.dp))
@@ -395,25 +395,30 @@ private fun WallESettingsScreen(state: IslandUiState) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "3. Dimensi Hardware Infinix GT 10 Pro",
+                    text = "3. Dimensi Hardware GT 10 Pro",
                     color = Color.White,
                     fontSize = 15.sp,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f)
                 )
                 Text(
                     text = "Reset Default",
                     color = EveCyanGlow,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier.clickable {
-                        IslandRepository.resetCalibration(context)
-                    }
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(EveCyanGlow.copy(alpha = 0.12f))
+                        .clickable {
+                            IslandRepository.resetCalibration(context)
+                        }
+                        .padding(horizontal = 10.dp, vertical = 5.dp)
                 )
             }
 
             CalibrationSliderItem(
                 label = "Tinggi Notch (Height)",
-                valueText = "${cal.idleHeightDp} dp (Presisi Bezel Infinix GT 10 Pro)",
+                valueText = "${cal.idleHeightDp} dp",
                 value = cal.idleHeightDp.toFloat(),
                 valueRange = 28f..54f
             ) { newVal ->
@@ -431,7 +436,7 @@ private fun WallESettingsScreen(state: IslandUiState) {
 
             CalibrationSliderItem(
                 label = "Lebar Lekukan Kurva (Corner Width)",
-                valueText = "${cal.cornerWidthDp} dp (Simetris 100% Kiri & Kanan)",
+                valueText = "${cal.cornerWidthDp} dp",
                 value = cal.cornerWidthDp.toFloat(),
                 valueRange = 16f..46f
             ) { newVal ->
@@ -585,9 +590,15 @@ private fun CalibrationSliderItem(
     Column {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(text = label, color = Color.White, fontSize = 12.sp)
+            Text(
+                text = label,
+                color = Color.White,
+                fontSize = 12.sp,
+                modifier = Modifier.weight(1f)
+            )
             Text(
                 text = valueText,
                 color = WallESolarAmber,

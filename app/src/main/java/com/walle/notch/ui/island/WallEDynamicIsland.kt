@@ -63,6 +63,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -86,6 +87,10 @@ import kotlinx.coroutines.delay
 private val CuteBlushPink = Color(0xFFFF7597)
 private val SoftCyanHalo = Color(0xFF00E5FF)
 
+private enum class MediaIconType {
+    PREV, PLAY, PAUSE, NEXT
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun WallEDynamicIslandOverlay(
@@ -103,9 +108,9 @@ fun WallEDynamicIslandOverlay(
     }
 
     // Auto-collapse seperti Nusa / Dynamic Island setelah 7 detik tanpa interaksi
-    LaunchedEffect(state.isExpanded, state.eveMood, state.mode) {
+    LaunchedEffect(state.isExpanded, state.eveMood, state.mode, state.music.isPlaying) {
         if (state.isExpanded && state.mode != IslandMode.NOTIFICATION) {
-            delay(7000L)
+            delay(7500L)
             IslandRepository.setExpanded(false)
         }
     }
@@ -135,11 +140,11 @@ fun WallEDynamicIslandOverlay(
     val targetTotalWidth: Dp = when {
         isHiddenInCamera -> cal.cameraHoleSizeDp.dp
         state.isExpanded -> when (state.mode) {
-            IslandMode.IDLE -> 276.dp          // Giant EVE Visor: proporsional seperti collapse versi besar
-            IslandMode.MUSIC -> 304.dp         // Nusa-style sleek music player
-            IslandMode.SOLAR_CHARGE -> 284.dp  // Sleek solar charge visor
-            IslandMode.NOTIFICATION -> 312.dp  // Clean quick reply card
-            IslandMode.CALL_TIMER -> 292.dp
+            IslandMode.IDLE -> 280.dp          // Giant EVE Visor: proporsional seperti collapse versi besar
+            IslandMode.MUSIC -> 318.dp         // Nusa-style sleek music player (lebar lega)
+            IslandMode.SOLAR_CHARGE -> 296.dp  // Sleek solar charge visor
+            IslandMode.NOTIFICATION -> 320.dp  // Clean quick reply card
+            IslandMode.CALL_TIMER -> 300.dp
         }
         else -> when (state.mode) {
             IslandMode.IDLE -> cal.idleWidthDp.dp
@@ -153,11 +158,11 @@ fun WallEDynamicIslandOverlay(
     val targetHeight: Dp = when {
         isHiddenInCamera -> cal.cameraHoleSizeDp.dp
         state.isExpanded -> when (state.mode) {
-            IslandMode.IDLE -> 88.dp           // Giant EVE Visor: ramping, bersih, fokus ke mata EVE besar
-            IslandMode.MUSIC -> 114.dp
-            IslandMode.SOLAR_CHARGE -> 94.dp
-            IslandMode.NOTIFICATION -> 128.dp
-            IslandMode.CALL_TIMER -> 104.dp
+            IslandMode.IDLE -> 92.dp           // Giant EVE Visor: ramping, bersih, fokus ke mata EVE besar
+            IslandMode.MUSIC -> 148.dp         // Tinggi cukup agar tombol bawah & judul tidak kepotong
+            IslandMode.SOLAR_CHARGE -> 114.dp
+            IslandMode.NOTIFICATION -> 152.dp
+            IslandMode.CALL_TIMER -> 124.dp
         }
         else -> cal.idleHeightDp.dp
     }
@@ -244,10 +249,8 @@ fun WallEDynamicIslandOverlay(
                     } catch (_: Exception) {}
 
                     if (!state.isExpanded) {
-                        // Ketuk saat collapse -> Membesar (Expand) seperti Dynamic Island
                         IslandRepository.setExpanded(true)
                     } else if (state.mode == IslandMode.IDLE) {
-                        // Saat Giant EVE Visor terbuka, ketuk untuk mengganti ekspresi wajah EVE!
                         IslandRepository.cycleEveMood(context)
                     } else {
                         IslandRepository.setExpanded(false)
@@ -266,7 +269,7 @@ fun WallEDynamicIslandOverlay(
             ),
         contentAlignment = Alignment.TopCenter
     ) {
-        // Garis kontur kurva bawah halus (Bottom Squircle Rim Highlight) saat di-expand agar lengkungan bawah terlihat super rapi & presisi
+        // Garis kontur kurva bawah halus (Bottom Squircle Rim Highlight) saat di-expand
         if (state.isExpanded) {
             Canvas(
                 modifier = Modifier.fillMaxSize()
@@ -327,7 +330,6 @@ fun WallEDynamicIslandOverlay(
  * Mode Standby & Giant Living EVE Visor:
  * Saat Collapse: Wajah EVE imut mengapit kamera.
  * Saat Expand: Tampilan sama persis seperti Collapse namun dalam skala besar (Giant EVE Visor 2.35x)
- * tanpa teks berantakan atau tombol kotak kaku!
  */
 @Composable
 private fun IdleModuleContent(state: IslandUiState) {
@@ -378,14 +380,15 @@ private fun IdleModuleContent(state: IslandUiState) {
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 6.dp, vertical = 2.dp),
+                .padding(horizontal = 4.dp, vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             // Left Wing: Soft Blush + Left Eye
             Row(
+                modifier = Modifier.weight(1f),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                horizontalArrangement = Arrangement.Start
             ) {
                 Box(
                     modifier = Modifier
@@ -393,7 +396,7 @@ private fun IdleModuleContent(state: IslandUiState) {
                         .clip(CircleShape)
                         .background(CuteBlushPink.copy(alpha = blushAlpha))
                 )
-
+                Spacer(modifier = Modifier.width(4.dp))
                 CuteEyeRenderer(
                     mood = state.eveMood,
                     isLeft = true,
@@ -408,8 +411,9 @@ private fun IdleModuleContent(state: IslandUiState) {
 
             // Right Wing: Right Eye + Soft Blush / Accessory
             Row(
+                modifier = Modifier.weight(1f),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                horizontalArrangement = Arrangement.End
             ) {
                 CuteEyeRenderer(
                     mood = state.eveMood,
@@ -418,12 +422,11 @@ private fun IdleModuleContent(state: IslandUiState) {
                     heartScale = heartScale,
                     sizeScale = 1f
                 )
-
+                Spacer(modifier = Modifier.width(4.dp))
                 if (state.eveMood == EveMood.PLANT) {
                     Text(
                         text = "🌱",
-                        fontSize = 10.sp,
-                        modifier = Modifier.padding(bottom = 1.dp)
+                        fontSize = 10.sp
                     )
                 } else if (state.eveMood == EveMood.SLEEPY) {
                     Text(
@@ -444,11 +447,11 @@ private fun IdleModuleContent(state: IslandUiState) {
             }
         }
     } else {
-        // EXPANDED: GIANT LIVING EVE VISOR (Tampilan sama seperti Collapse namun ukuran besar 2.3x & sangat hidup!)
+        // EXPANDED: GIANT LIVING EVE VISOR
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = 10.dp, bottom = 8.dp, start = 6.dp, end = 6.dp)
+                .padding(top = 12.dp, bottom = 10.dp, start = 4.dp, end = 4.dp)
         ) {
             Row(
                 modifier = Modifier
@@ -460,8 +463,9 @@ private fun IdleModuleContent(state: IslandUiState) {
             ) {
                 // Giant Left Wing: Soft Glowing Blush + Giant Left Eye
                 Row(
+                    modifier = Modifier.weight(1f),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(7.dp)
+                    horizontalArrangement = Arrangement.Start
                 ) {
                     Box(
                         modifier = Modifier
@@ -470,7 +474,7 @@ private fun IdleModuleContent(state: IslandUiState) {
                             .clip(CircleShape)
                             .background(CuteBlushPink.copy(alpha = blushAlpha))
                     )
-
+                    Spacer(modifier = Modifier.width(7.dp))
                     CuteEyeRenderer(
                         mood = state.eveMood,
                         isLeft = true,
@@ -485,8 +489,9 @@ private fun IdleModuleContent(state: IslandUiState) {
 
                 // Giant Right Wing: Giant Right Eye + Soft Glowing Blush / Badge
                 Row(
+                    modifier = Modifier.weight(1f),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(7.dp)
+                    horizontalArrangement = Arrangement.End
                 ) {
                     CuteEyeRenderer(
                         mood = state.eveMood,
@@ -495,18 +500,18 @@ private fun IdleModuleContent(state: IslandUiState) {
                         heartScale = heartScale,
                         sizeScale = 2.35f
                     )
-
+                    Spacer(modifier = Modifier.width(7.dp))
                     if (state.eveMood == EveMood.PLANT) {
                         Text(
                             text = "🌱",
-                            fontSize = 18.sp,
+                            fontSize = 16.sp,
                             modifier = Modifier.padding(top = 4.dp)
                         )
                     } else if (state.eveMood == EveMood.SLEEPY) {
                         Text(
                             text = "zZ",
                             color = EveCyanGlow.copy(alpha = 0.85f),
-                            fontSize = 15.sp,
+                            fontSize = 14.sp,
                             fontFamily = FontFamily.Monospace,
                             fontWeight = FontWeight.ExtraBold
                         )
@@ -522,14 +527,14 @@ private fun IdleModuleContent(state: IslandUiState) {
                 }
             }
 
-            // Indikator titik mood minimalis di bagian paling bawah visor (tanpa teks mengganggu)
+            // Indikator titik mood minimalis di bagian paling bawah visor
             Row(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .clickable {
                         IslandRepository.setExpanded(false)
                     }
-                    .padding(top = 4.dp),
+                    .padding(bottom = 2.dp),
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -581,13 +586,11 @@ private fun CuteEyeRenderer(
                         size.height * 0.88f
                     )
                 }
-                // Outer Neon Cyan Halo Glow
                 drawPath(
                     path = path,
                     color = SoftCyanHalo.copy(alpha = 0.28f),
                     style = Stroke(width = (5.2f * sizeScale).dp.toPx(), cap = StrokeCap.Round)
                 )
-                // Core Bright Cyan Eye
                 drawPath(
                     path = path,
                     color = EveCyanGlow,
@@ -597,7 +600,6 @@ private fun CuteEyeRenderer(
         }
         EveMood.WINK -> {
             if (isLeft) {
-                // Mata kiri terbuka oval bercahaya khas Pixar EVE
                 Canvas(
                     modifier = Modifier
                         .size(width = (10.5f * sizeScale).dp, height = (7f * sizeScale).dp)
@@ -611,7 +613,6 @@ private fun CuteEyeRenderer(
                     drawOval(color = EveCyanGlow)
                 }
             } else {
-                // Mata kanan mengedip melengkung manis
                 Canvas(
                     modifier = Modifier.size(
                         width = (12.5f * sizeScale).dp,
@@ -665,7 +666,6 @@ private fun CuteEyeRenderer(
             }
         }
         EveMood.SLEEPY -> {
-            // Mata terpejam melengkung ke bawah seperti sedang tidur nyenyak (Nusa Mascot Doze)
             Canvas(
                 modifier = Modifier.size(
                     width = (11.5f * sizeScale).dp,
@@ -694,7 +694,6 @@ private fun CuteEyeRenderer(
             }
         }
         EveMood.PLANT, EveMood.NORMAL -> {
-            // Mata oval miring khas EVE di film Pixar WALL-E dengan kedipan halus
             Canvas(
                 modifier = Modifier
                     .size(width = (11f * sizeScale).dp, height = (7f * sizeScale).dp)
@@ -715,7 +714,11 @@ private fun CuteEyeRenderer(
 /**
  * Mode Musik ala Nusa Notch:
  * - Compact: Sisi kiri (Album Art + Judul Marquee berjalan), Tengah (Kamera), Sisi kanan (Mata EVE + Waveform)
- * - Expanded: Kartu musik ramping dengan glowing progress head & teks marquee halus
+ * - Expanded:
+ *   1. Baris Atas (mengapit kamera fisik): Mata EVE di kiri kamera, Equalizer 4-Bar di kanan kamera.
+ *   2. Baris Tengah (di bawah kamera fisik, bebas terpotong): Album Art + Judul Lagu & Penyanyi lebar penuh.
+ *   3. Baris Scrubber: Waktu berjalan + Progress Bar glowing + Sisa waktu.
+ *   4. Baris Tombol Bawah: Tombol EVE Visor + Tombol Ikon Vector (Prev, Play/Pause, Next) dengan ruang napas bawah 14dp.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -812,10 +815,9 @@ private fun MusicModuleContent(state: IslandUiState) {
             // Right Wing: EVE Eye + Live Waveform Equalizer
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                modifier = Modifier.weight(1f),
+                horizontalArrangement = Arrangement.End,
+                modifier = Modifier.weight(1f)
             ) {
-                Spacer(modifier = Modifier.weight(1f))
                 CuteEyeRenderer(
                     mood = EveMood.HAPPY,
                     isLeft = false,
@@ -823,6 +825,7 @@ private fun MusicModuleContent(state: IslandUiState) {
                     heartScale = 1f,
                     sizeScale = 0.85f
                 )
+                Spacer(modifier = Modifier.width(6.dp))
                 Row(
                     verticalAlignment = Alignment.Bottom,
                     horizontalArrangement = Arrangement.spacedBy(2.dp),
@@ -840,7 +843,7 @@ private fun MusicModuleContent(state: IslandUiState) {
             }
         }
     } else {
-        // EXPANDED NUSA-STYLE SLEEK MUSIC VISOR
+        // EXPANDED NUSA-STYLE SLEEK MUSIC VISOR (Height = 148dp, Zero Clipping, Camera-Safe!)
         val progress = if (music.durationMs > 0) {
             (music.positionMs.toFloat() / music.durationMs.toFloat()).coerceIn(0f, 1f)
         } else {
@@ -850,82 +853,52 @@ private fun MusicModuleContent(state: IslandUiState) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = 12.dp, bottom = 10.dp, start = 6.dp, end = 6.dp),
+                .padding(top = 8.dp, bottom = 14.dp, start = 4.dp, end = 4.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            // Top Row framing the camera hole
+            // 1. Top Camera Bar (Mengapit lubang kamera fisik secara simetris 100%)
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(20.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Row(
+                    modifier = Modifier.weight(1f),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(34.dp)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(
-                                Brush.linearGradient(listOf(WallESolarAmber, EveCyanGlow))
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (music.albumArt != null) {
-                            Image(
-                                bitmap = music.albumArt.asImageBitmap(),
-                                contentDescription = null,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        } else {
-                            Text(
-                                text = "♫",
-                                color = PitchBlack,
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Black
-                            )
-                        }
-                    }
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = music.title,
-                            color = Color.White,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            modifier = Modifier.basicMarquee()
-                        )
-                        Text(
-                            text = music.artist,
-                            color = EveCyanGlow.copy(alpha = 0.85f),
-                            fontSize = 10.sp,
-                            maxLines = 1,
-                            modifier = Modifier.basicMarquee()
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.width((state.calibration.cameraHoleSizeDp + 4).dp))
-
-                // Right side: Animated Equalizer + Mini EVE Eyes
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.Start
                 ) {
                     CuteEyeRenderer(
                         mood = state.eveMood,
                         isLeft = true,
                         scaleY = 1f,
                         heartScale = 1f,
-                        sizeScale = 1.05f
+                        sizeScale = 0.95f
                     )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = music.outputDeviceName,
+                        color = EveCyanGlow.copy(alpha = 0.85f),
+                        fontSize = 9.5.sp,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1
+                    )
+                }
+
+                // Ruang tepat di lubang kamera fisik
+                Spacer(modifier = Modifier.width((state.calibration.cameraHoleSizeDp + 6).dp))
+
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.End
+                ) {
                     Row(
                         verticalAlignment = Alignment.Bottom,
                         horizontalArrangement = Arrangement.spacedBy(2.5.dp),
-                        modifier = Modifier.height(16.dp)
+                        modifier = Modifier.height(14.dp)
                     ) {
                         val m1 = if (music.isPlaying) bar1 else 0.3f
                         val m2 = if (music.isPlaying) bar2 else 0.3f
@@ -939,7 +912,68 @@ private fun MusicModuleContent(state: IslandUiState) {
                 }
             }
 
-            // Middle Row: Nusa-style Glowing Progress Scrubber
+            // 2. Song Info Row (Berada di bawah lubang kamera fisik, lebar penuh & tidak tertutup kamera!)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(
+                            Brush.linearGradient(listOf(WallESolarAmber, EveCyanGlow))
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (music.albumArt != null) {
+                        Image(
+                            bitmap = music.albumArt.asImageBitmap(),
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        Canvas(modifier = Modifier.size(16.dp)) {
+                            drawCircle(
+                                color = PitchBlack,
+                                radius = size.minDimension * 0.45f,
+                                style = Stroke(width = 2.2.dp.toPx())
+                            )
+                            drawCircle(
+                                color = PitchBlack,
+                                radius = size.minDimension * 0.16f
+                            )
+                        }
+                    }
+                }
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = music.title,
+                        color = Color.White,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        style = TextStyle(platformStyle = PlatformTextStyle(includeFontPadding = false)),
+                        modifier = Modifier.basicMarquee()
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = music.artist,
+                        color = EveCyanGlow.copy(alpha = 0.85f),
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                        style = TextStyle(platformStyle = PlatformTextStyle(includeFontPadding = false)),
+                        modifier = Modifier.basicMarquee()
+                    )
+                }
+            }
+
+            // 3. Nusa-style Glowing Progress Scrubber
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -949,12 +983,13 @@ private fun MusicModuleContent(state: IslandUiState) {
                     text = formatSeconds((music.positionMs / 1000L).toInt()),
                     color = Color.White.copy(alpha = 0.65f),
                     fontSize = 10.sp,
-                    fontFamily = FontFamily.Monospace
+                    fontFamily = FontFamily.Monospace,
+                    style = TextStyle(platformStyle = PlatformTextStyle(includeFontPadding = false))
                 )
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .height(4.dp)
+                        .height(4.5.dp)
                         .clip(CircleShape)
                         .background(Color.White.copy(alpha = 0.14f))
                 ) {
@@ -973,11 +1008,12 @@ private fun MusicModuleContent(state: IslandUiState) {
                     text = "-${formatSeconds(remainingSec)}",
                     color = Color.White.copy(alpha = 0.65f),
                     fontSize = 10.sp,
-                    fontFamily = FontFamily.Monospace
+                    fontFamily = FontFamily.Monospace,
+                    style = TextStyle(platformStyle = PlatformTextStyle(includeFontPadding = false))
                 )
             }
 
-            // Bottom Row: Minimalist Media Transport Controls
+            // 4. Bottom Row: Custom Vector Media Controls (Tidak pernah kepotong & tanpa emoji sistem!)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -985,29 +1021,119 @@ private fun MusicModuleContent(state: IslandUiState) {
             ) {
                 PillActionButton(
                     text = "EVE Visor",
-                    bg = Color.White.copy(alpha = 0.10f),
+                    bg = Color.White.copy(alpha = 0.12f),
                     fg = EveCyanGlow
                 ) {
                     IslandRepository.setMode(IslandMode.IDLE, expand = true)
                 }
 
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    PillActionButton(text = "⏮", bg = Color.White.copy(alpha = 0.12f), fg = Color.White) {
+                    MediaIconButton(
+                        iconType = MediaIconType.PREV,
+                        bg = Color.White.copy(alpha = 0.12f),
+                        fg = Color.White
+                    ) {
                         IslandRepository.onMediaPrevious?.invoke()
                     }
-                    PillActionButton(
-                        text = if (music.isPlaying) "⏸" else "▶",
+                    MediaIconButton(
+                        iconType = if (music.isPlaying) MediaIconType.PAUSE else MediaIconType.PLAY,
                         bg = EveCyanGlow,
                         fg = PitchBlack
                     ) {
                         IslandRepository.onMediaPlayPause?.invoke()
                     }
-                    PillActionButton(text = "⏭", bg = Color.White.copy(alpha = 0.12f), fg = Color.White) {
+                    MediaIconButton(
+                        iconType = MediaIconType.NEXT,
+                        bg = Color.White.copy(alpha = 0.12f),
+                        fg = Color.White
+                    ) {
                         IslandRepository.onMediaNext?.invoke()
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MediaIconButton(
+    iconType: MediaIconType,
+    bg: Color,
+    fg: Color,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .width(36.dp)
+            .height(26.dp)
+            .clip(CircleShape)
+            .background(bg)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Canvas(modifier = Modifier.size(11.dp)) {
+            val w = size.width
+            val h = size.height
+            when (iconType) {
+                MediaIconType.PREV -> {
+                    drawLine(
+                        color = fg,
+                        start = Offset(w * 0.18f, h * 0.18f),
+                        end = Offset(w * 0.18f, h * 0.82f),
+                        strokeWidth = 2.dp.toPx(),
+                        cap = StrokeCap.Round
+                    )
+                    val path = Path().apply {
+                        moveTo(w * 0.85f, h * 0.15f)
+                        lineTo(w * 0.32f, h * 0.50f)
+                        lineTo(w * 0.85f, h * 0.85f)
+                        close()
+                    }
+                    drawPath(path = path, color = fg)
+                }
+                MediaIconType.NEXT -> {
+                    val path = Path().apply {
+                        moveTo(w * 0.15f, h * 0.15f)
+                        lineTo(w * 0.68f, h * 0.50f)
+                        lineTo(w * 0.15f, h * 0.85f)
+                        close()
+                    }
+                    drawPath(path = path, color = fg)
+                    drawLine(
+                        color = fg,
+                        start = Offset(w * 0.82f, h * 0.18f),
+                        end = Offset(w * 0.82f, h * 0.82f),
+                        strokeWidth = 2.dp.toPx(),
+                        cap = StrokeCap.Round
+                    )
+                }
+                MediaIconType.PLAY -> {
+                    val path = Path().apply {
+                        moveTo(w * 0.24f, h * 0.12f)
+                        lineTo(w * 0.86f, h * 0.50f)
+                        lineTo(w * 0.24f, h * 0.88f)
+                        close()
+                    }
+                    drawPath(path = path, color = fg)
+                }
+                MediaIconType.PAUSE -> {
+                    drawLine(
+                        color = fg,
+                        start = Offset(w * 0.30f, h * 0.16f),
+                        end = Offset(w * 0.30f, h * 0.84f),
+                        strokeWidth = 2.4.dp.toPx(),
+                        cap = StrokeCap.Round
+                    )
+                    drawLine(
+                        color = fg,
+                        start = Offset(w * 0.70f, h * 0.16f),
+                        end = Offset(w * 0.70f, h * 0.84f),
+                        strokeWidth = 2.4.dp.toPx(),
+                        cap = StrokeCap.Round
+                    )
                 }
             }
         }
@@ -1026,22 +1152,19 @@ private fun SolarChargeModuleContent(state: IslandUiState) {
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 6.dp, vertical = 2.dp),
+                .padding(horizontal = 4.dp, vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Row(
+                modifier = Modifier.weight(1f),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                horizontalArrangement = Arrangement.Start
             ) {
                 Text(
-                    text = "⚡",
-                    fontSize = 11.sp
-                )
-                Text(
-                    text = "45W",
+                    text = "45W SOLAR",
                     color = WallESolarAmber,
-                    fontSize = 11.sp,
+                    fontSize = 10.5.sp,
                     fontFamily = FontFamily.Monospace,
                     fontWeight = FontWeight.Bold
                 )
@@ -1049,20 +1172,26 @@ private fun SolarChargeModuleContent(state: IslandUiState) {
 
             Spacer(modifier = Modifier.width((state.calibration.cameraHoleSizeDp + 6).dp))
 
-            Text(
-                text = "${bat.level}%",
-                color = DirectivePlantGreen,
-                fontSize = 12.sp,
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.ExtraBold
-            )
+            Row(
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.End
+            ) {
+                Text(
+                    text = "${bat.level}%",
+                    color = DirectivePlantGreen,
+                    fontSize = 12.sp,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.ExtraBold
+                )
+            }
         }
     } else {
-        // Sleek Expanded Solar Charge Visor
+        // Sleek Expanded Solar Charge Visor (Height = 114dp)
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = 12.dp, bottom = 10.dp, start = 8.dp, end = 8.dp),
+                .padding(top = 10.dp, bottom = 14.dp, start = 4.dp, end = 4.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
             Row(
@@ -1071,35 +1200,51 @@ private fun SolarChargeModuleContent(state: IslandUiState) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(
+                    modifier = Modifier.weight(1f),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.Start
                 ) {
                     CuteEyeRenderer(
                         mood = EveMood.HAPPY,
                         isLeft = true,
                         scaleY = 1f,
                         heartScale = 1f,
-                        sizeScale = 1.4f
+                        sizeScale = 1.2f
                     )
+                    Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "⚡ 45W",
+                        text = "45W FAST",
                         color = WallESolarAmber,
-                        fontSize = 13.sp,
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.ExtraBold,
                         fontFamily = FontFamily.Monospace
                     )
                 }
 
-                Spacer(modifier = Modifier.width((state.calibration.cameraHoleSizeDp + 4).dp))
+                Spacer(modifier = Modifier.width((state.calibration.cameraHoleSizeDp + 6).dp))
 
-                Text(
-                    text = "${bat.level}% • ${bat.temperatureCelsius}°C",
-                    color = DirectivePlantGreen,
-                    fontSize = 13.sp,
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Black
-                )
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    Text(
+                        text = "${bat.level}% • ${bat.temperatureCelsius}°C",
+                        color = DirectivePlantGreen,
+                        fontSize = 11.5.sp,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Black
+                    )
+                }
             }
+
+            Text(
+                text = "All-Round FastCharge Aktif",
+                color = Color.White.copy(alpha = 0.85f),
+                fontSize = 11.5.sp,
+                fontWeight = FontWeight.SemiBold,
+                style = TextStyle(platformStyle = PlatformTextStyle(includeFontPadding = false))
+            )
 
             // Glowing Solar Energy Bar
             Box(
@@ -1139,7 +1284,7 @@ private fun NotificationModuleContent(
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 6.dp, vertical = 2.dp),
+                .padding(horizontal = 4.dp, vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
@@ -1159,7 +1304,8 @@ private fun NotificationModuleContent(
                         text = notif.appLabel.take(2),
                         color = PitchBlack,
                         fontSize = 9.sp,
-                        fontWeight = FontWeight.Black
+                        fontWeight = FontWeight.Black,
+                        style = TextStyle(platformStyle = PlatformTextStyle(includeFontPadding = false))
                     )
                 }
                 Text(
@@ -1188,7 +1334,7 @@ private fun NotificationModuleContent(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = 12.dp, bottom = 10.dp, start = 8.dp, end = 8.dp),
+                .padding(top = 10.dp, bottom = 14.dp, start = 4.dp, end = 4.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
             Row(
@@ -1203,7 +1349,7 @@ private fun NotificationModuleContent(
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(22.dp)
+                            .size(20.dp)
                             .clip(CircleShape)
                             .background(DirectivePlantGreen),
                         contentAlignment = Alignment.Center
@@ -1211,24 +1357,32 @@ private fun NotificationModuleContent(
                         Text(
                             text = notif.appLabel.take(2),
                             color = PitchBlack,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Black
+                            fontSize = 9.5.sp,
+                            fontWeight = FontWeight.Black,
+                            style = TextStyle(platformStyle = PlatformTextStyle(includeFontPadding = false))
                         )
                     }
                     Text(
                         text = notif.sender,
                         color = EveCyanGlow,
-                        fontSize = 12.sp,
+                        fontSize = 11.5.sp,
                         fontWeight = FontWeight.Bold,
-                        maxLines = 1
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
-                Spacer(modifier = Modifier.width((state.calibration.cameraHoleSizeDp + 4).dp))
+                Spacer(modifier = Modifier.width((state.calibration.cameraHoleSizeDp + 6).dp))
 
-                PillActionButton(text = "Selesai", bg = Color.White.copy(alpha = 0.12f), fg = Color.White) {
-                    onFocusInput(false)
-                    IslandRepository.setMode(IslandMode.IDLE, expand = false)
+                Row(
+                    modifier = Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    PillActionButton(text = "Tutup", bg = Color.White.copy(alpha = 0.12f), fg = Color.White) {
+                        onFocusInput(false)
+                        IslandRepository.setMode(IslandMode.IDLE, expand = false)
+                    }
                 }
             }
 
@@ -1236,8 +1390,9 @@ private fun NotificationModuleContent(
                 text = notif.message,
                 color = Color.White,
                 fontSize = 12.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                style = TextStyle(platformStyle = PlatformTextStyle(includeFontPadding = false))
             )
 
             Row(
@@ -1260,7 +1415,8 @@ private fun NotificationModuleContent(
                         Text(
                             text = "Balas pesan...",
                             color = Color.White.copy(alpha = 0.45f),
-                            fontSize = 11.sp
+                            fontSize = 11.sp,
+                            style = TextStyle(platformStyle = PlatformTextStyle(includeFontPadding = false))
                         )
                     }
                     BasicTextField(
@@ -1270,7 +1426,11 @@ private fun NotificationModuleContent(
                             replyText = it
                         },
                         singleLine = true,
-                        textStyle = TextStyle(color = Color.White, fontSize = 11.sp),
+                        textStyle = TextStyle(
+                            color = Color.White,
+                            fontSize = 11.sp,
+                            platformStyle = PlatformTextStyle(includeFontPadding = false)
+                        ),
                         cursorBrush = SolidColor(EveCyanGlow),
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -1295,7 +1455,7 @@ private fun CallTimerModuleContent(state: IslandUiState) {
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 6.dp, vertical = 2.dp),
+                .padding(horizontal = 4.dp, vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
@@ -1311,19 +1471,25 @@ private fun CallTimerModuleContent(state: IslandUiState) {
 
             Spacer(modifier = Modifier.width((state.calibration.cameraHoleSizeDp + 6).dp))
 
-            Text(
-                text = formatSeconds(ct.timerRemainingSec),
-                color = WallESolarAmber,
-                fontSize = 11.sp,
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Bold
-            )
+            Row(
+                modifier = Modifier.weight(1f),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = formatSeconds(ct.timerRemainingSec),
+                    color = WallESolarAmber,
+                    fontSize = 11.sp,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
     } else {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = 12.dp, bottom = 10.dp, start = 8.dp, end = 8.dp),
+                .padding(top = 10.dp, bottom = 14.dp, start = 4.dp, end = 4.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
             Row(
@@ -1334,22 +1500,32 @@ private fun CallTimerModuleContent(state: IslandUiState) {
                 Text(
                     text = ct.callerName,
                     color = Color.White,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
                 )
-                Spacer(modifier = Modifier.width((state.calibration.cameraHoleSizeDp + 4).dp))
-                Text(
-                    text = if (ct.isCallConnected) formatSeconds(ct.callDurationSec) else formatSeconds(ct.timerRemainingSec),
-                    color = DirectivePlantGreen,
-                    fontSize = 13.sp,
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Bold
-                )
+                Spacer(modifier = Modifier.width((state.calibration.cameraHoleSizeDp + 6).dp))
+                Row(
+                    modifier = Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = if (ct.isCallConnected) formatSeconds(ct.callDurationSec) else formatSeconds(ct.timerRemainingSec),
+                        color = DirectivePlantGreen,
+                        fontSize = 12.sp,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 if (!ct.isCallConnected) {
                     PillActionButton(
@@ -1392,17 +1568,19 @@ private fun PillActionButton(
 ) {
     Box(
         modifier = Modifier
+            .height(26.dp)
             .clip(CircleShape)
             .background(bg)
             .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 4.dp),
+            .padding(horizontal = 12.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text = text,
             color = fg,
             fontSize = 11.sp,
-            fontWeight = FontWeight.Bold
+            fontWeight = FontWeight.Bold,
+            style = TextStyle(platformStyle = PlatformTextStyle(includeFontPadding = false))
         )
     }
 }
