@@ -1,13 +1,10 @@
 package com.walle.notch.service
 
-import android.app.ActivityManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.hardware.display.DisplayManager
 import android.os.BatteryManager
-import android.view.Display
 import com.walle.notch.core.model.BatteryTelemetry
 import com.walle.notch.core.state.IslandRepository
 import kotlinx.coroutines.CoroutineScope
@@ -16,7 +13,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import java.io.File
 import kotlin.math.roundToInt
 
 class SystemMonitorManager(private val context: Context) {
@@ -59,7 +55,6 @@ class SystemMonitorManager(private val context: Context) {
         monitorJob?.cancel()
         monitorJob = scope.launch {
             while (isActive) {
-                sampleGamingAndSystemMetrics()
                 tickTimersAndMedia()
                 delay(1000L)
             }
@@ -98,57 +93,6 @@ class SystemMonitorManager(private val context: Context) {
             temperatureCelsius = tempC,
             voltageMv = voltage
         )
-    }
-
-    private fun sampleGamingAndSystemMetrics() {
-        val am = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
-        val memInfo = ActivityManager.MemoryInfo()
-        am?.getMemoryInfo(memInfo)
-
-        val totalGb = if (memInfo.totalMem > 0) {
-            memInfo.totalMem / (1024f * 1024f * 1024f)
-        } else {
-            8.0f
-        }
-        val usedBytes = (memInfo.totalMem - memInfo.availMem).coerceAtLeast(0L)
-        val usedGb = usedBytes / (1024f * 1024f * 1024f)
-        val usedPct = if (memInfo.totalMem > 0) {
-            ((usedBytes * 100f) / memInfo.totalMem).roundToInt().coerceIn(1, 99)
-        } else {
-            62
-        }
-
-        val dm = context.getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager
-        val display = dm?.getDisplay(Display.DEFAULT_DISPLAY)
-        val refreshHz = display?.refreshRate?.roundToInt() ?: 120
-
-        val cpuTemp = readCpuThermalCelsius()
-            ?: (IslandRepository.uiState.value.battery.temperatureCelsius + 2.5f)
-
-        IslandRepository.updateGaming { prev ->
-            prev.copy(
-                refreshRateHz = if (prev.lock120Hz) 120 else refreshHz,
-                cpuTempCelsius = (cpuTemp * 10f).roundToInt() / 10f,
-                ramUsedPercent = usedPct,
-                ramUsedGb = (usedGb * 10f).roundToInt() / 10f,
-                ramTotalGb = (totalGb * 10f).roundToInt() / 10f
-            )
-        }
-    }
-
-    private fun readCpuThermalCelsius(): Float? {
-        return try {
-            val file = File("/sys/class/thermal/thermal_zone0/temp")
-            if (file.canRead()) {
-                val raw = file.readText().trim().toFloatOrNull() ?: return null
-                val temp = if (raw > 1000f) raw / 1000f else raw / 10f
-                if (temp in 20f..95f) temp else null
-            } else {
-                null
-            }
-        } catch (_: Exception) {
-            null
-        }
     }
 
     private fun tickTimersAndMedia() {

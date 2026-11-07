@@ -1,5 +1,6 @@
 package com.walle.notch.ui.island
 
+import android.view.HapticFeedbackConstants
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
@@ -9,6 +10,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -42,8 +44,12 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -51,6 +57,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.walle.notch.core.model.EveMood
 import com.walle.notch.core.model.IslandMode
 import com.walle.notch.core.model.IslandUiState
 import com.walle.notch.core.model.NotificationPayload
@@ -61,9 +68,8 @@ import com.walle.notch.ui.theme.DirectivePlantGreen
 import com.walle.notch.ui.theme.EveCyanGlow
 import com.walle.notch.ui.theme.PitchBlack
 import com.walle.notch.ui.theme.WallESolarAmber
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+
+private val CuteBlushPink = Color(0xFFFF7597)
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -71,6 +77,8 @@ fun WallEDynamicIslandOverlay(
     state: IslandUiState,
     onRequestKeyboardFocus: (Boolean) -> Unit
 ) {
+    val context = LocalContext.current
+    val view = LocalView.current
     val cal = state.calibration
 
     LaunchedEffect(state.isExpanded, state.mode) {
@@ -81,25 +89,21 @@ fun WallEDynamicIslandOverlay(
 
     val isHiddenInCamera = cal.autoHideLandscape && state.isLandscapeFullscreen && !state.isExpanded
 
-    // Ear width on both sides (each ear adds 18dp)
     val earRadius = 18.dp
     val bottomRadius = if (state.isExpanded) 26.dp else 18.dp
 
-    // Body width (content area between ears)
     val targetBodyWidth: Dp = when {
         isHiddenInCamera -> cal.cameraHoleSizeDp.dp
         state.isExpanded -> 320.dp
         else -> when (state.mode) {
-            IslandMode.IDLE -> 140.dp
-            IslandMode.MUSIC -> 230.dp
+            IslandMode.IDLE -> 148.dp
+            IslandMode.MUSIC -> 232.dp
             IslandMode.SOLAR_CHARGE -> 220.dp
             IslandMode.NOTIFICATION -> 240.dp
             IslandMode.CALL_TIMER -> 236.dp
-            IslandMode.GAMING_HUD -> 240.dp
         }
     }
 
-    // Total width including the 2 flared ears
     val targetTotalWidth = targetBodyWidth + (earRadius * 2)
 
     val targetHeight: Dp = when {
@@ -110,7 +114,6 @@ fun WallEDynamicIslandOverlay(
             IslandMode.SOLAR_CHARGE -> 160.dp
             IslandMode.NOTIFICATION -> 176.dp
             IslandMode.CALL_TIMER -> 154.dp
-            IslandMode.GAMING_HUD -> 164.dp
         }
         else -> 38.dp
     }
@@ -151,20 +154,23 @@ fun WallEDynamicIslandOverlay(
             .background(PitchBlack)
             .combinedClickable(
                 onClick = {
-                    if (!state.isExpanded) {
+                    if (state.mode == IslandMode.IDLE && !state.isExpanded) {
+                        // In Idle mode, tapping directly cycles cute expressions & haptic feedback!
+                        try {
+                            view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                        } catch (_: Exception) {}
+                        IslandRepository.cycleEveMood(context)
+                    } else if (!state.isExpanded) {
                         IslandRepository.setExpanded(true)
-                    } else if (state.mode == IslandMode.IDLE) {
+                    } else {
                         IslandRepository.setExpanded(false)
                     }
                 },
                 onLongClick = {
-                    state.notification?.contentIntent?.let { pending ->
-                        try {
-                            pending.send()
-                        } catch (_: Exception) {
-                        }
-                    }
-                    IslandRepository.setExpanded(!state.isExpanded)
+                    try {
+                        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                    } catch (_: Exception) {}
+                    IslandRepository.toggleExpanded()
                 }
             )
             .padding(horizontal = earRadius),
@@ -180,11 +186,9 @@ fun WallEDynamicIslandOverlay(
                     onFocusInput = onRequestKeyboardFocus
                 )
                 IslandMode.CALL_TIMER -> CallTimerModuleContent(state)
-                IslandMode.GAMING_HUD -> GamingHudModuleContent(state)
             }
         }
 
-        // X-Ray camera guide for calibration
         if (cal.xrayCameraGuide) {
             Box(
                 modifier = Modifier
@@ -199,10 +203,13 @@ fun WallEDynamicIslandOverlay(
 
 @Composable
 private fun IdleModuleContent(state: IslandUiState) {
-    val infinite = rememberInfiniteTransition(label = "eveBlink")
+    val context = LocalContext.current
+    val infinite = rememberInfiniteTransition(label = "cuteAnimations")
+
+    // Blinking animation
     val eyeScaleY by infinite.animateFloat(
         initialValue = 1f,
-        targetValue = 0.15f,
+        targetValue = 0.12f,
         animationSpec = infiniteRepeatable(
             animation = tween(durationMillis = 180, delayMillis = 3600, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
@@ -210,72 +217,100 @@ private fun IdleModuleContent(state: IslandUiState) {
         label = "eyeScaleY"
     )
 
-    // Current time formatted nicely like the reference image "4:50 PM"
-    var currentTime by remember {
-        mutableStateOf(SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date()))
-    }
+    // Soft heart/blush pulse
+    val heartScale by infinite.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.22f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 650, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "heartPulse"
+    )
 
-    LaunchedEffect(Unit) {
-        while (true) {
-            currentTime = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date())
-            kotlinx.coroutines.delay(10000L)
-        }
-    }
+    val blushAlpha by infinite.animateFloat(
+        initialValue = 0.45f,
+        targetValue = 0.90f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "blushPulse"
+    )
 
     if (!state.isExpanded) {
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 6.dp, vertical = 4.dp),
+                .padding(horizontal = 8.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            // EVE Eyes on Left
-            Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+            // Left Side: Soft Blush + Left Eye
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                // Left Blush Cheek
                 Box(
                     modifier = Modifier
-                        .size(width = 8.dp, height = 5.dp)
-                        .scale(scaleX = 1f, scaleY = eyeScaleY)
+                        .size(width = 6.dp, height = 3.5.dp)
                         .clip(CircleShape)
-                        .background(EveCyanGlow)
+                        .background(CuteBlushPink.copy(alpha = blushAlpha))
                 )
-                Box(
-                    modifier = Modifier
-                        .size(width = 8.dp, height = 5.dp)
-                        .scale(scaleX = 1f, scaleY = eyeScaleY)
-                        .clip(CircleShape)
-                        .background(EveCyanGlow)
+
+                // Left Eye
+                CuteEyeRenderer(
+                    mood = state.eveMood,
+                    isLeft = true,
+                    scaleY = eyeScaleY,
+                    heartScale = heartScale
                 )
             }
 
-            // Clean Clock Text in center matching photo
-            Text(
-                text = currentTime,
-                color = Color.White,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.SansSerif,
-                letterSpacing = (-0.2).sp
-            )
+            // Punch hole camera space in center (18dp)
+            Spacer(modifier = Modifier.width(18.dp))
 
-            // Mini Solar Bars on Right
+            // Right Side: Right Eye + Soft Blush / Accessory
             Row(
-                verticalAlignment = Alignment.Bottom,
-                horizontalArrangement = Arrangement.spacedBy(2.dp)
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                val activeBars = (state.battery.level / 25).coerceIn(1, 4)
-                for (i in 1..4) {
+                // Right Eye
+                CuteEyeRenderer(
+                    mood = state.eveMood,
+                    isLeft = false,
+                    scaleY = eyeScaleY,
+                    heartScale = heartScale
+                )
+
+                // Right Accessory or Blush
+                if (state.eveMood == EveMood.PLANT) {
+                    Text(
+                        text = "🌱",
+                        fontSize = 11.sp,
+                        modifier = Modifier.padding(bottom = 2.dp)
+                    )
+                } else if (state.eveMood == EveMood.SLEEPY) {
+                    Text(
+                        text = "zZ",
+                        color = EveCyanGlow.copy(alpha = 0.75f),
+                        fontSize = 10.sp,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold
+                    )
+                } else {
                     Box(
                         modifier = Modifier
-                            .width(2.5.dp)
-                            .height((5 + i * 2).dp)
-                            .clip(RoundedCornerShape(1.dp))
-                            .background(if (i <= activeBars) WallESolarAmber else Color.White.copy(alpha = 0.25f))
+                            .size(width = 6.dp, height = 3.5.dp)
+                            .clip(CircleShape)
+                            .background(CuteBlushPink.copy(alpha = blushAlpha))
                     )
                 }
             }
         }
     } else {
+        // Expanded: Interactive EVE Companion Dashboard
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -287,56 +322,220 @@ private fun IdleModuleContent(state: IslandUiState) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
-                    Text(
-                        text = "WALL-E NOTCH VISOR",
-                        color = WallESolarAmber,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace
-                    )
-                    Text(
-                        text = "Infinix GT 10 Pro • 120Hz",
-                        color = Color.White,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(text = "🌱", fontSize = 14.sp)
+                    Column {
+                        Text(
+                            text = "EVE COMPANION MASCOT",
+                            color = EveCyanGlow,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace
+                        )
+                        Text(
+                            text = "Ketuk ekspresi untuk mengganti wajah EVE",
+                            color = Color.White.copy(alpha = 0.75f),
+                            fontSize = 11.sp
+                        )
+                    }
                 }
                 PillActionButton(text = "Tutup", bg = Color.White.copy(alpha = 0.14f), fg = Color.White) {
                     IslandRepository.setExpanded(false)
                 }
             }
 
+            // Interactive Mood Selector Grid
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                QuickModeTile(
+                EveMoodTile(
                     modifier = Modifier.weight(1f),
-                    title = "Musik",
-                    subtitle = "Audio Spotify",
+                    label = "^_^",
+                    title = "Senang",
+                    selected = state.eveMood == EveMood.HAPPY,
+                    accent = EveCyanGlow
+                ) {
+                    IslandRepository.setEveMood(context, EveMood.HAPPY)
+                }
+                EveMoodTile(
+                    modifier = Modifier.weight(1f),
+                    label = ";-)",
+                    title = "Kedip",
+                    selected = state.eveMood == EveMood.WINK,
+                    accent = WallESolarAmber
+                ) {
+                    IslandRepository.setEveMood(context, EveMood.WINK)
+                }
+                EveMoodTile(
+                    modifier = Modifier.weight(1f),
+                    label = "<3",
+                    title = "Cinta",
+                    selected = state.eveMood == EveMood.LOVE,
+                    accent = CuteBlushPink
+                ) {
+                    IslandRepository.setEveMood(context, EveMood.LOVE)
+                }
+                EveMoodTile(
+                    modifier = Modifier.weight(1f),
+                    label = "🌱",
+                    title = "Tanaman",
+                    selected = state.eveMood == EveMood.PLANT,
                     accent = DirectivePlantGreen
+                ) {
+                    IslandRepository.setEveMood(context, EveMood.PLANT)
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Baterai Surya: ${state.battery.level}%",
+                    color = WallESolarAmber,
+                    fontSize = 11.sp,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.SemiBold
+                )
+                PillActionButton(
+                    text = "Buka Musik",
+                    bg = DirectivePlantGreen.copy(alpha = 0.2f),
+                    fg = DirectivePlantGreen
                 ) {
                     IslandRepository.setMode(IslandMode.MUSIC, expand = true)
                 }
-                QuickModeTile(
-                    modifier = Modifier.weight(1f),
-                    title = "Surya ${state.battery.level}%",
-                    subtitle = "${state.battery.temperatureCelsius}°C",
-                    accent = WallESolarAmber
-                ) {
-                    IslandRepository.setMode(IslandMode.SOLAR_CHARGE, expand = true)
+            }
+        }
+    }
+}
+
+@Composable
+private fun CuteEyeRenderer(
+    mood: EveMood,
+    isLeft: Boolean,
+    scaleY: Float,
+    heartScale: Float
+) {
+    when (mood) {
+        EveMood.HAPPY -> {
+            // Happy upward arc ^
+            Canvas(modifier = Modifier.size(width = 12.dp, height = 7.dp)) {
+                val path = Path().apply {
+                    moveTo(1f, size.height * 0.9f)
+                    quadraticBezierTo(
+                        size.width / 2f, 0f,
+                        size.width - 1f, size.height * 0.9f
+                    )
                 }
-                QuickModeTile(
-                    modifier = Modifier.weight(1f),
-                    title = "GT HUD",
-                    subtitle = "${state.gaming.refreshRateHz} FPS",
-                    accent = AxiomAlertRed
-                ) {
-                    IslandRepository.setMode(IslandMode.GAMING_HUD, expand = true)
+                drawPath(
+                    path = path,
+                    color = EveCyanGlow,
+                    style = Stroke(width = 2.4.dp.toPx(), cap = StrokeCap.Round)
+                )
+            }
+        }
+        EveMood.WINK -> {
+            if (isLeft) {
+                // Normal glowing eye
+                Box(
+                    modifier = Modifier
+                        .size(width = 9.dp, height = 6.dp)
+                        .clip(CircleShape)
+                        .background(EveCyanGlow)
+                )
+            } else {
+                // Playful wink arc ;)
+                Canvas(modifier = Modifier.size(width = 12.dp, height = 7.dp)) {
+                    val path = Path().apply {
+                        moveTo(1f, size.height * 0.9f)
+                        quadraticBezierTo(
+                            size.width / 2f, 0f,
+                            size.width - 1f, size.height * 0.9f
+                        )
+                    }
+                    drawPath(
+                        path = path,
+                        color = EveCyanGlow,
+                        style = Stroke(width = 2.4.dp.toPx(), cap = StrokeCap.Round)
+                    )
                 }
             }
         }
+        EveMood.LOVE -> {
+            // Pulsing Heart Eye
+            Canvas(
+                modifier = Modifier
+                    .size(width = 11.dp, height = 11.dp)
+                    .scale(heartScale)
+            ) {
+                val w = size.width
+                val h = size.height
+                val heartPath = Path().apply {
+                    moveTo(w / 2f, h)
+                    cubicTo(0f, h * 0.65f, 0f, 0f, w / 4f, 0f)
+                    cubicTo(w / 2f, 0f, w / 2f, h * 0.35f, w / 2f, h * 0.35f)
+                    cubicTo(w / 2f, h * 0.35f, w / 2f, 0f, (w * 3f) / 4f, 0f)
+                    cubicTo(w, 0f, w, h * 0.65f, w / 2f, h)
+                    close()
+                }
+                drawPath(path = heartPath, color = EveCyanGlow)
+            }
+        }
+        EveMood.SLEEPY -> {
+            // Horizontal line -
+            Box(
+                modifier = Modifier
+                    .size(width = 10.dp, height = 2.dp)
+                    .clip(CircleShape)
+                    .background(EveCyanGlow)
+            )
+        }
+        EveMood.PLANT, EveMood.NORMAL -> {
+            // Expressive oval EVE eyes with blink
+            Box(
+                modifier = Modifier
+                    .size(width = 9.dp, height = 6.dp)
+                    .scale(scaleX = 1f, scaleY = scaleY)
+                    .clip(CircleShape)
+                    .background(EveCyanGlow)
+            )
+        }
+    }
+}
+
+@Composable
+private fun EveMoodTile(
+    modifier: Modifier = Modifier,
+    label: String,
+    title: String,
+    selected: Boolean,
+    accent: Color,
+    onClick: () -> Unit
+) {
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(if (selected) accent.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.08f))
+            .clickable(onClick = onClick)
+            .padding(vertical = 8.dp, horizontal = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = label,
+            color = if (selected) accent else Color.White,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold
+        )
+        Text(
+            text = title,
+            color = Color.White.copy(alpha = 0.7f),
+            fontSize = 10.sp
+        )
     }
 }
 
@@ -906,111 +1105,6 @@ private fun CallTimerModuleContent(state: IslandUiState) {
 }
 
 @Composable
-private fun GamingHudModuleContent(state: IslandUiState) {
-    val g = state.gaming
-    if (!state.isExpanded) {
-        Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 8.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(
-                text = "${g.refreshRateHz} FPS | ${g.cpuTempCelsius}°C",
-                color = DirectivePlantGreen,
-                fontSize = 12.sp,
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = "RAM ${g.ramUsedPercent}%",
-                color = EveCyanGlow,
-                fontSize = 12.sp,
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Bold
-            )
-        }
-    } else {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(top = 18.dp, bottom = 12.dp, start = 8.dp, end = 8.dp),
-            verticalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Text(
-                        text = "GT 10 PRO MECHA ENGINE",
-                        color = AxiomAlertRed,
-                        fontSize = 12.sp,
-                        fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "Dimensity 8050 • Gaming Visor",
-                        color = Color.White,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-                PillActionButton(text = "Tutup", bg = Color.White.copy(alpha = 0.14f), fg = Color.White) {
-                    IslandRepository.setExpanded(false)
-                }
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = "Layar: ${g.refreshRateHz}Hz",
-                    color = DirectivePlantGreen,
-                    fontSize = 12.sp,
-                    fontFamily = FontFamily.Monospace
-                )
-                Text(
-                    text = "Suhu: ${g.cpuTempCelsius}°C",
-                    color = WallESolarAmber,
-                    fontSize = 12.sp,
-                    fontFamily = FontFamily.Monospace
-                )
-                Text(
-                    text = "RAM: ${g.ramUsedGb}/${g.ramTotalGb}GB",
-                    color = EveCyanGlow,
-                    fontSize = 12.sp,
-                    fontFamily = FontFamily.Monospace
-                )
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                PillActionButton(
-                    text = if (g.lock120Hz) "120Hz Lock: ON" else "120Hz Lock: OFF",
-                    bg = if (g.lock120Hz) EveCyanGlow else Color.White.copy(alpha = 0.14f),
-                    fg = if (g.lock120Hz) PitchBlack else Color.White
-                ) {
-                    IslandRepository.updateGaming { it.copy(lock120Hz = !it.lock120Hz) }
-                }
-                PillActionButton(
-                    text = if (g.blockPopups) "Blokir Notif: ON" else "Blokir Notif: OFF",
-                    bg = if (g.blockPopups) WallESolarAmber else Color.White.copy(alpha = 0.14f),
-                    fg = if (g.blockPopups) PitchBlack else Color.White
-                ) {
-                    IslandRepository.updateGaming { it.copy(blockPopups = !it.blockPopups) }
-                }
-            }
-        }
-    }
-}
-
-@Composable
 private fun PillActionButton(
     text: String,
     bg: Color,
@@ -1030,37 +1124,6 @@ private fun PillActionButton(
             color = fg,
             fontSize = 11.sp,
             fontWeight = FontWeight.Bold
-        )
-    }
-}
-
-@Composable
-private fun QuickModeTile(
-    modifier: Modifier = Modifier,
-    title: String,
-    subtitle: String,
-    accent: Color,
-    onClick: () -> Unit
-) {
-    Column(
-        modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(Color.White.copy(alpha = 0.08f))
-            .clickable(onClick = onClick)
-            .padding(8.dp)
-    ) {
-        Text(
-            text = title,
-            color = accent,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Bold,
-            maxLines = 1
-        )
-        Text(
-            text = subtitle,
-            color = Color.White.copy(alpha = 0.7f),
-            fontSize = 11.sp,
-            maxLines = 1
         )
     }
 }

@@ -4,7 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import com.walle.notch.core.model.BatteryTelemetry
 import com.walle.notch.core.model.CallTimerState
-import com.walle.notch.core.model.GamingTelemetry
+import com.walle.notch.core.model.EveMood
 import com.walle.notch.core.model.IslandCalibration
 import com.walle.notch.core.model.IslandMode
 import com.walle.notch.core.model.IslandUiState
@@ -32,15 +32,22 @@ object IslandRepository {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val cal = IslandCalibration(
             offsetXDp = prefs.getInt("offsetXDp", 0),
-            offsetYDp = prefs.getInt("offsetYDp", 6),
-            idleWidthDp = prefs.getInt("idleWidthDp", 126),
-            idleHeightDp = prefs.getInt("idleHeightDp", 34),
+            offsetYDp = prefs.getInt("offsetYDp", 0),
+            idleWidthDp = prefs.getInt("idleWidthDp", 148),
+            idleHeightDp = prefs.getInt("idleHeightDp", 36),
             cameraHoleSizeDp = prefs.getInt("cameraHoleSizeDp", 18),
             splitPillEnabled = prefs.getBoolean("splitPillEnabled", true),
             autoHideLandscape = prefs.getBoolean("autoHideLandscape", true),
             xrayCameraGuide = prefs.getBoolean("xrayCameraGuide", false)
         )
-        _uiState.update { it.copy(calibration = cal) }
+        val savedMoodName = prefs.getString("eveMood", EveMood.HAPPY.name)
+        val mood = try {
+            EveMood.valueOf(savedMoodName ?: EveMood.HAPPY.name)
+        } catch (_: Exception) {
+            EveMood.HAPPY
+        }
+
+        _uiState.update { it.copy(calibration = cal, eveMood = mood) }
     }
 
     fun updateCalibration(context: Context, transform: (IslandCalibration) -> IslandCalibration) {
@@ -57,6 +64,21 @@ object IslandRepository {
             .putBoolean("autoHideLandscape", updated.autoHideLandscape)
             .putBoolean("xrayCameraGuide", updated.xrayCameraGuide)
             .apply()
+    }
+
+    fun setEveMood(context: Context?, mood: EveMood) {
+        _uiState.update { it.copy(eveMood = mood) }
+        context?.let { ctx ->
+            val prefs = ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            prefs.edit().putString("eveMood", mood.name).apply()
+        }
+    }
+
+    fun cycleEveMood(context: Context?) {
+        val current = _uiState.value.eveMood
+        val moods = EveMood.values()
+        val nextIndex = (current.ordinal + 1) % moods.size
+        setEveMood(context, moods[nextIndex])
     }
 
     fun resetCalibration(context: Context) {
@@ -101,15 +123,11 @@ object IslandRepository {
 
     fun postNotification(payload: NotificationPayload) {
         _uiState.update { state ->
-            if (state.mode == IslandMode.GAMING_HUD && state.gaming.blockPopups) {
-                state.copy(notification = payload)
-            } else {
-                state.copy(
-                    notification = payload,
-                    mode = IslandMode.NOTIFICATION,
-                    isExpanded = false
-                )
-            }
+            state.copy(
+                notification = payload,
+                mode = IslandMode.NOTIFICATION,
+                isExpanded = false
+            )
         }
     }
 
@@ -126,12 +144,6 @@ object IslandRepository {
     fun updateCallTimer(transform: (CallTimerState) -> CallTimerState) {
         _uiState.update { state ->
             state.copy(callTimer = transform(state.callTimer))
-        }
-    }
-
-    fun updateGaming(transform: (GamingTelemetry) -> GamingTelemetry) {
-        _uiState.update { state ->
-            state.copy(gaming = transform(state.gaming))
         }
     }
 

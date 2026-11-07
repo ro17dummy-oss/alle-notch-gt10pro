@@ -9,15 +9,23 @@ enum class IslandMode {
     MUSIC,
     SOLAR_CHARGE,
     NOTIFICATION,
-    CALL_TIMER,
-    GAMING_HUD
+    CALL_TIMER
+}
+
+enum class EveMood {
+    HAPPY,   // ^_^ Happy curved eyes with soft blush cheeks
+    WINK,    // ;) Cute playful wink
+    LOVE,    // <3 Glowing cyan heart eyes
+    SLEEPY,  // -_- Restful sleepy eyes with zZ
+    PLANT,   // 🌱 Wall-E green plant sprout directive
+    NORMAL   // O_O Classic EVE blinking oval eyes
 }
 
 data class IslandCalibration(
     val offsetXDp: Int = 0,
-    val offsetYDp: Int = 6,
-    val idleWidthDp: Int = 126,
-    val idleHeightDp: Int = 34,
+    val offsetYDp: Int = 0,
+    val idleWidthDp: Int = 148,
+    val idleHeightDp: Int = 36,
     val cameraHoleSizeDp: Int = 18,
     val splitPillEnabled: Boolean = true,
     val autoHideLandscape: Boolean = true,
@@ -67,18 +75,9 @@ data class CallTimerState(
     val declineIntent: PendingIntent? = null
 )
 
-data class GamingTelemetry(
-    val refreshRateHz: Int = 120,
-    val cpuTempCelsius: Float = 39.2f,
-    val ramUsedPercent: Int = 62,
-    val ramUsedGb: Float = 5.0f,
-    val ramTotalGb: Float = 8.0f,
-    val lock120Hz: Boolean = true,
-    val blockPopups: Boolean = true
-)
-
 data class IslandUiState(
     val mode: IslandMode = IslandMode.IDLE,
+    val eveMood: EveMood = EveMood.HAPPY,
     val isExpanded: Boolean = false,
     val isLandscapeFullscreen: Boolean = false,
     val calibration: IslandCalibration = IslandCalibration(),
@@ -86,7 +85,6 @@ data class IslandUiState(
     val notification: NotificationPayload? = null,
     val battery: BatteryTelemetry = BatteryTelemetry(),
     val callTimer: CallTimerState = CallTimerState(),
-    val gaming: GamingTelemetry = GamingTelemetry(),
     val isOverlayServiceRunning: Boolean = false,
     val isNotificationListenerConnected: Boolean = false,
     val lastFeedbackMessage: String? = null

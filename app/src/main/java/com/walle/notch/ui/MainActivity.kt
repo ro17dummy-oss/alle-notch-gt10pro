@@ -39,6 +39,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.walle.notch.core.model.EveMood
 import com.walle.notch.core.model.IslandMode
 import com.walle.notch.core.model.IslandUiState
 import com.walle.notch.core.state.IslandRepository
@@ -107,13 +108,13 @@ private fun WallESettingsScreen(state: IslandUiState) {
                 fontWeight = FontWeight.Bold
             )
             Text(
-                text = "Liquid Top-Bezel Notch",
+                text = "Cute EVE Liquid Notch",
                 color = Color.White,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold
             )
             Text(
-                text = "Lekukan halus menyatu dengan bibir bezel atas Infinix GT 10 Pro tanpa celah di atas kamera.",
+                text = "Lekukan halus menyatu ke bezel atas layar Infinix GT 10 Pro dengan maskot EVE interaktif yang super menggemaskan.",
                 color = Color.White.copy(alpha = 0.72f),
                 fontSize = 13.sp
             )
@@ -136,7 +137,7 @@ private fun WallESettingsScreen(state: IslandUiState) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Preview Lekukan Liquid Notch",
+                    text = "Preview Sentuh Wajah EVE",
                     color = Color.White,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold
@@ -166,14 +167,12 @@ private fun WallESettingsScreen(state: IslandUiState) {
                 )
             }
 
-            state.lastFeedbackMessage?.let { msg ->
-                Text(
-                    text = msg,
-                    color = DirectivePlantGreen,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
+            Text(
+                text = "Tip: Ketuk wajah EVE di kotak preview di atas untuk berganti ekspresi!",
+                color = EveCyanGlow,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold
+            )
         }
 
         // Section 1: Activation & Permissions
@@ -260,7 +259,7 @@ private fun WallESettingsScreen(state: IslandUiState) {
             }
         }
 
-        // Section 2: Trigger & Test
+        // Section 2: Cute EVE Expressions
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -271,7 +270,7 @@ private fun WallESettingsScreen(state: IslandUiState) {
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Text(
-                text = "2. Uji Coba Mode",
+                text = "2. Pilih Ekspresi Menggemaskan EVE",
                 color = Color.White,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Bold
@@ -283,28 +282,21 @@ private fun WallESettingsScreen(state: IslandUiState) {
             ) {
                 ModeSelectButton(
                     modifier = Modifier.weight(1f),
-                    label = "Jam & EVE",
-                    selected = state.mode == IslandMode.IDLE,
+                    label = "^_^ Senang",
+                    selected = state.eveMood == EveMood.HAPPY,
                     accent = EveCyanGlow
                 ) {
                     IslandRepository.setMode(IslandMode.IDLE, expand = false)
+                    IslandRepository.setEveMood(context, EveMood.HAPPY)
                 }
                 ModeSelectButton(
                     modifier = Modifier.weight(1f),
-                    label = "Musik + Timer",
-                    selected = state.mode == IslandMode.MUSIC,
-                    accent = DirectivePlantGreen
-                ) {
-                    IslandRepository.updateMusic { it.copy(isPlaying = true) }
-                    IslandRepository.setMode(IslandMode.MUSIC, expand = false)
-                }
-                ModeSelectButton(
-                    modifier = Modifier.weight(1f),
-                    label = "Cas 45W",
-                    selected = state.mode == IslandMode.SOLAR_CHARGE,
+                    label = ";-) Kedip",
+                    selected = state.eveMood == EveMood.WINK,
                     accent = WallESolarAmber
                 ) {
-                    IslandRepository.setMode(IslandMode.SOLAR_CHARGE, expand = false)
+                    IslandRepository.setMode(IslandMode.IDLE, expand = false)
+                    IslandRepository.setEveMood(context, EveMood.WINK)
                 }
             }
 
@@ -314,27 +306,61 @@ private fun WallESettingsScreen(state: IslandUiState) {
             ) {
                 ModeSelectButton(
                     modifier = Modifier.weight(1f),
+                    label = "<3 Cinta",
+                    selected = state.eveMood == EveMood.LOVE,
+                    accent = Color(0xFFFF7597)
+                ) {
+                    IslandRepository.setMode(IslandMode.IDLE, expand = false)
+                    IslandRepository.setEveMood(context, EveMood.LOVE)
+                }
+                ModeSelectButton(
+                    modifier = Modifier.weight(1f),
+                    label = "🌱 Tanaman",
+                    selected = state.eveMood == EveMood.PLANT,
+                    accent = DirectivePlantGreen
+                ) {
+                    IslandRepository.setMode(IslandMode.IDLE, expand = false)
+                    IslandRepository.setEveMood(context, EveMood.PLANT)
+                }
+            }
+
+            // Other Activities
+            Text(
+                text = "Uji Aktivitas Lainnya:",
+                color = Color.White.copy(alpha = 0.8f),
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(top = 4.dp)
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                ModeSelectButton(
+                    modifier = Modifier.weight(1f),
+                    label = "Musik Spotify",
+                    selected = state.mode == IslandMode.MUSIC,
+                    accent = DirectivePlantGreen
+                ) {
+                    IslandRepository.updateMusic { it.copy(isPlaying = true) }
+                    IslandRepository.setMode(IslandMode.MUSIC, expand = false)
+                }
+                ModeSelectButton(
+                    modifier = Modifier.weight(1f),
+                    label = "Cas Solar 45W",
+                    selected = state.mode == IslandMode.SOLAR_CHARGE,
+                    accent = WallESolarAmber
+                ) {
+                    IslandRepository.setMode(IslandMode.SOLAR_CHARGE, expand = false)
+                }
+                ModeSelectButton(
+                    modifier = Modifier.weight(1f),
                     label = "Notif WA",
                     selected = state.mode == IslandMode.NOTIFICATION,
                     accent = EveCyanGlow
                 ) {
                     IslandRepository.setMode(IslandMode.NOTIFICATION, expand = false)
-                }
-                ModeSelectButton(
-                    modifier = Modifier.weight(1f),
-                    label = "Telepon",
-                    selected = state.mode == IslandMode.CALL_TIMER,
-                    accent = DirectivePlantGreen
-                ) {
-                    IslandRepository.setMode(IslandMode.CALL_TIMER, expand = false)
-                }
-                ModeSelectButton(
-                    modifier = Modifier.weight(1f),
-                    label = "Gaming HUD",
-                    selected = state.mode == IslandMode.GAMING_HUD,
-                    accent = AxiomAlertRed
-                ) {
-                    IslandRepository.setMode(IslandMode.GAMING_HUD, expand = false)
                 }
             }
 
@@ -355,7 +381,7 @@ private fun WallESettingsScreen(state: IslandUiState) {
             }
         }
 
-        // Section 3: Settings & Auto-Hide
+        // Section 3: Auto-Hide
         Column(
             modifier = Modifier
                 .fillMaxWidth()
