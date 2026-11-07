@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Wall-E Notch</string>
+    <string name="accessibility_service_label">Wall-E Notch Overlay (Infinix GT 10 Pro)</string>
+    <string name="accessibility_service_description">Menampilkan kapsul interaktif Dynamic Island bertema Wall-E dan EVE tepat di area kamera depan (punch-hole) Infinix GT 10 Pro.</string>
+    <string name="notification_service_label">Wall-E Notch Media &amp; Notification Bridge</string>
+</resources>
