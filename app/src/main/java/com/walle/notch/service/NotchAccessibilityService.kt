@@ -177,6 +177,14 @@ class NotchAccessibilityService : AccessibilityService() {
         if (event == null) return
 
         when (event.eventType) {
+            AccessibilityEvent.TYPE_VIEW_CLICKED,
+            AccessibilityEvent.TYPE_VIEW_SCROLLED -> {
+                // Sentuhan / scroll layar pengguna: bangunkan EVE jika sedang tidur lalu sembunyikan ke blackout
+                if (!_uiStateAppOpen()) {
+                    IslandRepository.onScreenTouched()
+                }
+            }
+
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
             AccessibilityEvent.TYPE_WINDOWS_CHANGED -> {
                 val pkg = event.packageName?.toString() ?: return
@@ -203,6 +211,8 @@ class NotchAccessibilityService : AccessibilityService() {
             }
         }
     }
+
+    private fun _uiStateAppOpen(): Boolean = IslandRepository.uiState.value.isAppOpen
 
     override fun onInterrupt() {
     }

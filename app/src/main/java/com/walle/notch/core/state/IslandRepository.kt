@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import com.walle.notch.core.model.BatteryTelemetry
 import com.walle.notch.core.model.CallTimerState
+import com.walle.notch.core.model.EveIdlePhase
 import com.walle.notch.core.model.EveMood
 import com.walle.notch.core.model.IslandCalibration
 import com.walle.notch.core.model.IslandMode
@@ -28,6 +29,8 @@ object IslandRepository {
 
     private val repoScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var transientBannerJob: Job? = null
+    private var eveIdleCycleJob: Job? = null
+    private var eveWakeJob: Job? = null
 
     private val _uiState = MutableStateFlow(IslandUiState())
     val uiState: StateFlow<IslandUiState> = _uiState.asStateFlow()
@@ -129,15 +132,88 @@ object IslandRepository {
     }
 
     fun setAppOpen(isApp: Boolean) {
+        val wasAppOpen = _uiState.value.isAppOpen
         _uiState.update { it.copy(isAppOpen = isApp) }
+        if (isApp && _uiState.value.isExpanded && _uiState.value.mode == IslandMode.IDLE) {
+            setExpanded(false)
+        }
+        if (!isApp && wasAppOpen) {
+            // Kembali ke Home Screen: mulai siklus 10 detik standby EVE
+            restartEveIdleCountdown()
+        }
     }
 
     fun setNotificationShadeOpen(isShade: Boolean) {
         _uiState.update { it.copy(isNotificationShadeOpen = isShade) }
+        if (isShade && _uiState.value.isExpanded) {
+            setExpanded(false)
+        }
     }
 
     fun setLandscapeHorizontal(isHorizontal: Boolean) {
         _uiState.update { it.copy(isLandscapeHorizontal = isHorizontal, isLandscapeFullscreen = isHorizontal) }
+        if (isHorizontal && _uiState.value.isExpanded) {
+            setExpanded(false)
+        }
+    }
+
+    /**
+     * Siklus 10 Detik Standby EVE:
+     * 1. 0 - 10s: AWAKE_BLINK (melek ramah mengapit kamera)
+     * 2. Detik 10: PRE_SLEEP_LOOK (2.2s lirik kiri-kanan realistis)
+     * 3. Detik 12.2+: SLEEPING_ZZZ (tidur nyenyak + zZZ Cyan & Amber)
+     */
+    fun restartEveIdleCountdown() {
+        eveWakeJob?.cancel()
+        eveIdleCycleJob?.cancel()
+        _uiState.update { it.copy(eveIdlePhase = EveIdlePhase.AWAKE_BLINK) }
+
+        eveIdleCycleJob = repoScope.launch {
+            delay(10_000L) // 10 detik penuh
+            _uiState.update { it.copy(eveIdlePhase = EveIdlePhase.PRE_SLEEP_LOOK) }
+            delay(2_200L) // Durasi lirik kiri-kanan
+            _uiState.update { it.copy(eveIdlePhase = EveIdlePhase.SLEEPING_ZZZ) }
+        }
+    }
+
+    /**
+     * Sentuhan Layar (Touch Event):
+     * Melek (400ms) ➔ Senyum ^_^ (500ms) ➔ Touch Blackout
+     */
+    fun onScreenTouched() {
+        val currentPhase = _uiState.value.eveIdlePhase
+        if (currentPhase == EveIdlePhase.TOUCH_BLACKOUT) return
+
+        eveIdleCycleJob?.cancel()
+        eveWakeJob?.cancel()
+
+        eveWakeJob = repoScope.launch {
+            // Tahap 1: Melek jelas (400ms)
+            _uiState.update { it.copy(eveIdlePhase = EveIdlePhase.WAKE_OPEN) }
+            delay(400L)
+            // Tahap 2: Senyum manis ^_^ (500ms)
+            _uiState.update { it.copy(eveIdlePhase = EveIdlePhase.WAKE_SMILE) }
+            delay(500L)
+            // Tahap 3: Blackout Notch bebas gangguan
+            _uiState.update { it.copy(eveIdlePhase = EveIdlePhase.TOUCH_BLACKOUT) }
+
+            // Setelah diam 3.5 detik tanpa sentuhan baru, EVE kembali standby 10 detik
+            delay(3_500L)
+            restartEveIdleCountdown()
+        }
+    }
+
+    /**
+     * Gesture Swipe-Up pada notch: Quick Nap instan
+     */
+    fun triggerQuickNap() {
+        eveWakeJob?.cancel()
+        eveIdleCycleJob?.cancel()
+        eveIdleCycleJob = repoScope.launch {
+            _uiState.update { it.copy(eveIdlePhase = EveIdlePhase.PRE_SLEEP_LOOK) }
+            delay(2_200L)
+            _uiState.update { it.copy(eveIdlePhase = EveIdlePhase.SLEEPING_ZZZ) }
+        }
     }
 
     fun resetCalibration(context: Context) {

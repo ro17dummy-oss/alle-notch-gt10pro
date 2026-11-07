@@ -21,6 +21,24 @@ enum class EveMood {
     NORMAL   // O_O Classic EVE blinking oval eyes
 }
 
+/**
+ * Fase status interaksi EVE saat Standby (Idle):
+ * - AWAKE_BLINK: Melek ramah, berkedip santai mengapit kamera (0-10s)
+ * - PRE_SLEEP_LOOK: Detik ke-10 menoleh cek situasi kiri lalu kanan secara realistis
+ * - SLEEPING_ZZZ: Tidur lelap dengan efek napas (breathing glow) + animasi zZZ Cyan-Amber (1.2s)
+ * - WAKE_OPEN: Melek jelas saat layar disentuh (400ms)
+ * - WAKE_SMILE: Tersenyum manis ^_^ saat menyapa (500ms)
+ * - TOUCH_BLACKOUT: Notch hitam murni bebas gangguan saat layar aktif digunakan
+ */
+enum class EveIdlePhase {
+    AWAKE_BLINK,
+    PRE_SLEEP_LOOK,
+    SLEEPING_ZZZ,
+    WAKE_OPEN,
+    WAKE_SMILE,
+    TOUCH_BLACKOUT
+}
+
 data class IslandCalibration(
     val offsetXDp: Int = 0,
     val offsetYDp: Int = 0,
@@ -83,6 +101,7 @@ data class CallTimerState(
 data class IslandUiState(
     val mode: IslandMode = IslandMode.IDLE,
     val eveMood: EveMood = EveMood.HAPPY,
+    val eveIdlePhase: EveIdlePhase = EveIdlePhase.AWAKE_BLINK,
     val isExpanded: Boolean = false,
     val isAppOpen: Boolean = false,                 // Sedang membuka aplikasi (bukan di Home Screen)
     val isNotificationShadeOpen: Boolean = false,   // Menu atas / status bar sedang digulir
