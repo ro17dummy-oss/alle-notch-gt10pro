@@ -30,6 +30,8 @@ import com.walle.notch.ui.theme.WallENotchTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -70,14 +72,19 @@ class NotchAccessibilityService : AccessibilityService() {
         IslandRepository.restartEveIdleCountdown()
     }
 
-    // Sembunyikan jendela overlay sepenuhnya (bukan sekadar compose 0dp) agar tidak bergeser/terlihat
+    // Jendela overlay tetap VISIBLE selama animasi geser-atas; baru GONE setelah selesai
     private fun observeNotchHidden() {
         serviceScope.launch {
             IslandRepository.uiState
                 .map { it.isNotchHidden }
                 .distinctUntilChanged()
-                .collect { hidden ->
-                    composeView?.visibility = if (hidden) View.GONE else View.VISIBLE
+                .collectLatest { hidden ->
+                    if (hidden) {
+                        delay(350)
+                        composeView?.visibility = View.GONE
+                    } else {
+                        composeView?.visibility = View.VISIBLE
+                    }
                 }
         }
     }

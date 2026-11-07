@@ -59,6 +59,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -122,10 +123,17 @@ fun WallEDynamicIslandOverlay(
     // 1. Hilang sepenuhnya jika layar horizontal
     // 2. Hilang ketika membuka Aplikasi saat mode Standby IDLE (muncul jika ada event Dynamic Island: musik/notif/cas)
     // 3. Hilang ketika gulir menu atas/bawah (status bar / notification shade)
-    if (state.isNotchHidden) {
-        Box(modifier = Modifier.size(0.dp))
-        return
-    }
+    // Hilang: geser ke atas + memudar (260ms). Muncul: turun dari atas dengan sedikit membal.
+    // Ukuran tidak diubah, jadi tidak ada pergeseran ke samping.
+    val hideProgress by animateFloatAsState(
+        targetValue = if (state.isNotchHidden) 1f else 0f,
+        animationSpec = if (state.isNotchHidden) {
+            tween(durationMillis = 260, easing = FastOutSlowInEasing)
+        } else {
+            spring(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow)
+        },
+        label = "notchHide"
+    )
 
     val isHiddenInCamera = cal.autoHideLandscape && state.isLandscapeFullscreen && !state.isExpanded
 
@@ -212,6 +220,10 @@ fun WallEDynamicIslandOverlay(
 
     Box(
         modifier = Modifier
+            .graphicsLayer {
+                translationY = -hideProgress * (size.height + 12.dp.toPx())
+                alpha = 1f - 0.7f * hideProgress.coerceIn(0f, 1f)
+            }
             .width(animatedWidth)
             .height(animatedHeight)
             .shadow(
