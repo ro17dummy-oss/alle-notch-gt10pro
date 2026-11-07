@@ -1,6 +1,5 @@
 package com.walle.notch.ui.island
 
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
@@ -12,7 +11,6 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -41,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -62,6 +61,9 @@ import com.walle.notch.ui.theme.DirectivePlantGreen
 import com.walle.notch.ui.theme.EveCyanGlow
 import com.walle.notch.ui.theme.PitchBlack
 import com.walle.notch.ui.theme.WallESolarAmber
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -71,58 +73,55 @@ fun WallEDynamicIslandOverlay(
 ) {
     val cal = state.calibration
 
-    // Release keyboard focus whenever island collapses or switches away from notification
     LaunchedEffect(state.isExpanded, state.mode) {
         if (!state.isExpanded || state.mode != IslandMode.NOTIFICATION) {
             onRequestKeyboardFocus(false)
         }
     }
 
-    // Auto-hide into punch-hole when landscape fullscreen is active
     val isHiddenInCamera = cal.autoHideLandscape && state.isLandscapeFullscreen && !state.isExpanded
 
-    val targetWidth: Dp = when {
+    // Ear width on both sides (each ear adds 18dp)
+    val earRadius = 18.dp
+    val bottomRadius = if (state.isExpanded) 26.dp else 18.dp
+
+    // Body width (content area between ears)
+    val targetBodyWidth: Dp = when {
         isHiddenInCamera -> cal.cameraHoleSizeDp.dp
-        state.isExpanded -> 352.dp
+        state.isExpanded -> 320.dp
         else -> when (state.mode) {
-            IslandMode.IDLE -> cal.idleWidthDp.dp
-            IslandMode.MUSIC -> 198.dp
-            IslandMode.SOLAR_CHARGE -> 238.dp
-            IslandMode.NOTIFICATION -> 252.dp
-            IslandMode.CALL_TIMER -> 248.dp
-            IslandMode.GAMING_HUD -> 256.dp
+            IslandMode.IDLE -> 140.dp
+            IslandMode.MUSIC -> 230.dp
+            IslandMode.SOLAR_CHARGE -> 220.dp
+            IslandMode.NOTIFICATION -> 240.dp
+            IslandMode.CALL_TIMER -> 236.dp
+            IslandMode.GAMING_HUD -> 240.dp
         }
     }
+
+    // Total width including the 2 flared ears
+    val targetTotalWidth = targetBodyWidth + (earRadius * 2)
 
     val targetHeight: Dp = when {
         isHiddenInCamera -> cal.cameraHoleSizeDp.dp
         state.isExpanded -> when (state.mode) {
-            IslandMode.IDLE -> 152.dp
-            IslandMode.MUSIC -> 176.dp
-            IslandMode.SOLAR_CHARGE -> 164.dp
-            IslandMode.NOTIFICATION -> 182.dp
-            IslandMode.CALL_TIMER -> 156.dp
-            IslandMode.GAMING_HUD -> 168.dp
+            IslandMode.IDLE -> 148.dp
+            IslandMode.MUSIC -> 168.dp
+            IslandMode.SOLAR_CHARGE -> 160.dp
+            IslandMode.NOTIFICATION -> 176.dp
+            IslandMode.CALL_TIMER -> 154.dp
+            IslandMode.GAMING_HUD -> 164.dp
         }
-        else -> when (state.mode) {
-            IslandMode.IDLE -> cal.idleHeightDp.dp
-            IslandMode.MUSIC -> 36.dp
-            IslandMode.SOLAR_CHARGE -> 38.dp
-            IslandMode.NOTIFICATION -> 40.dp
-            IslandMode.CALL_TIMER -> 40.dp
-            IslandMode.GAMING_HUD -> 36.dp
-        }
+        else -> 38.dp
     }
 
-    val targetCornerRadius: Dp = if (state.isExpanded) 32.dp else 50.dp
-
     val animatedWidth by animateDpAsState(
-        targetValue = targetWidth,
+        targetValue = targetTotalWidth,
         animationSpec = spring(
             dampingRatio = 0.72f,
             stiffness = Spring.StiffnessMediumLow
         ),
-        label = "islandWidth"
+        label = "notchWidth"
     )
 
     val animatedHeight by animateDpAsState(
@@ -131,128 +130,69 @@ fun WallEDynamicIslandOverlay(
             dampingRatio = 0.74f,
             stiffness = Spring.StiffnessMediumLow
         ),
-        label = "islandHeight"
+        label = "notchHeight"
     )
 
-    val animatedCorner by animateDpAsState(
-        targetValue = targetCornerRadius,
-        animationSpec = spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMedium),
-        label = "islandCorner"
-    )
+    val notchShape = remember(earRadius, bottomRadius) {
+        LiquidNotchShape(earRadius = earRadius, bottomRadius = bottomRadius)
+    }
 
-    val borderColor by animateColorAsState(
-        targetValue = when {
-            isHiddenInCamera -> Color.Transparent
-            state.mode == IslandMode.IDLE -> EveCyanGlow.copy(alpha = 0.42f)
-            state.mode == IslandMode.MUSIC -> DirectivePlantGreen.copy(alpha = 0.50f)
-            state.mode == IslandMode.SOLAR_CHARGE -> WallESolarAmber.copy(alpha = 0.70f)
-            state.mode == IslandMode.NOTIFICATION -> EveCyanGlow.copy(alpha = 0.65f)
-            state.mode == IslandMode.CALL_TIMER -> DirectivePlantGreen.copy(alpha = 0.65f)
-            state.mode == IslandMode.GAMING_HUD -> AxiomAlertRed.copy(alpha = 0.65f)
-            else -> WallESolarAmber.copy(alpha = 0.35f)
-        },
-        animationSpec = tween(250),
-        label = "borderColor"
-    )
-
-    val showSplitBubble = cal.splitPillEnabled &&
-        !state.isExpanded &&
-        !isHiddenInCamera &&
-        state.callTimer.timerRunning &&
-        (state.mode == IslandMode.IDLE || state.mode == IslandMode.MUSIC)
-
-    val splitWidth by animateDpAsState(
-        targetValue = if (showSplitBubble) 56.dp else 0.dp,
-        animationSpec = spring(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow),
-        label = "splitWidth"
-    )
-
-    Row(
-        verticalAlignment = Alignment.Top,
-        horizontalArrangement = Arrangement.Center
-    ) {
-        // Main Capsule
-        Box(
-            modifier = Modifier
-                .width(animatedWidth)
-                .height(animatedHeight)
-                .clip(RoundedCornerShape(animatedCorner))
-                .background(PitchBlack)
-                .border(1.dp, borderColor, RoundedCornerShape(animatedCorner))
-                .combinedClickable(
-                    onClick = {
-                        // Single Tap = Expand (or collapse if already in Idle Expanded)
-                        if (!state.isExpanded) {
-                            IslandRepository.setExpanded(true)
-                        } else if (state.mode == IslandMode.IDLE) {
-                            IslandRepository.setExpanded(false)
-                        }
-                    },
-                    onLongClick = {
-                        // Long Press = Collapse or trigger source notification intent
-                        state.notification?.contentIntent?.let { pending ->
-                            try {
-                                pending.send()
-                            } catch (_: Exception) {
-                            }
-                        }
-                        IslandRepository.setExpanded(!state.isExpanded)
+    Box(
+        modifier = Modifier
+            .width(animatedWidth)
+            .height(animatedHeight)
+            .shadow(
+                elevation = if (state.isExpanded) 16.dp else 6.dp,
+                shape = notchShape,
+                ambientColor = PitchBlack,
+                spotColor = PitchBlack
+            )
+            .clip(notchShape)
+            .background(PitchBlack)
+            .combinedClickable(
+                onClick = {
+                    if (!state.isExpanded) {
+                        IslandRepository.setExpanded(true)
+                    } else if (state.mode == IslandMode.IDLE) {
+                        IslandRepository.setExpanded(false)
                     }
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            if (!isHiddenInCamera) {
-                when (state.mode) {
-                    IslandMode.IDLE -> IdleModuleContent(state)
-                    IslandMode.MUSIC -> MusicModuleContent(state)
-                    IslandMode.SOLAR_CHARGE -> SolarChargeModuleContent(state)
-                    IslandMode.NOTIFICATION -> NotificationModuleContent(
-                        state = state,
-                        onFocusInput = onRequestKeyboardFocus
-                    )
-                    IslandMode.CALL_TIMER -> CallTimerModuleContent(state)
-                    IslandMode.GAMING_HUD -> GamingHudModuleContent(state)
+                },
+                onLongClick = {
+                    state.notification?.contentIntent?.let { pending ->
+                        try {
+                            pending.send()
+                        } catch (_: Exception) {
+                        }
+                    }
+                    IslandRepository.setExpanded(!state.isExpanded)
                 }
-            }
-
-            // Optional X-Ray Physical Punch-Hole Guide for Infinix GT 10 Pro calibration
-            if (cal.xrayCameraGuide) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .padding(top = 6.dp)
-                        .size(cal.cameraHoleSizeDp.dp)
-                        .clip(CircleShape)
-                        .background(AxiomAlertRed.copy(alpha = 0.35f))
-                        .border(1.5.dp, AxiomAlertRed, CircleShape)
+            )
+            .padding(horizontal = earRadius),
+        contentAlignment = Alignment.TopCenter
+    ) {
+        if (!isHiddenInCamera) {
+            when (state.mode) {
+                IslandMode.IDLE -> IdleModuleContent(state)
+                IslandMode.MUSIC -> MusicModuleContent(state)
+                IslandMode.SOLAR_CHARGE -> SolarChargeModuleContent(state)
+                IslandMode.NOTIFICATION -> NotificationModuleContent(
+                    state = state,
+                    onFocusInput = onRequestKeyboardFocus
                 )
+                IslandMode.CALL_TIMER -> CallTimerModuleContent(state)
+                IslandMode.GAMING_HUD -> GamingHudModuleContent(state)
             }
         }
 
-        // Split Pill (Secondary Right Bubble for Concurrent Timer)
-        if (splitWidth > 4.dp) {
-            Spacer(modifier = Modifier.width(6.dp))
+        // X-Ray camera guide for calibration
+        if (cal.xrayCameraGuide) {
             Box(
                 modifier = Modifier
-                    .width(splitWidth)
-                    .height(animatedHeight.coerceAtMost(38.dp))
-                    .clip(RoundedCornerShape(50.dp))
-                    .background(PitchBlack)
-                    .border(1.dp, WallESolarAmber.copy(alpha = 0.55f), RoundedCornerShape(50.dp))
-                    .clickable {
-                        IslandRepository.setMode(IslandMode.CALL_TIMER, expand = true)
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = formatSeconds(state.callTimer.timerRemainingSec),
-                    color = WallESolarAmber,
-                    fontSize = 12.sp,
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1
-                )
-            }
+                    .padding(top = 2.dp)
+                    .size(cal.cameraHoleSizeDp.dp)
+                    .clip(CircleShape)
+                    .background(AxiomAlertRed.copy(alpha = 0.4f))
+            )
         }
     }
 }
@@ -270,33 +210,55 @@ private fun IdleModuleContent(state: IslandUiState) {
         label = "eyeScaleY"
     )
 
+    // Current time formatted nicely like the reference image "4:50 PM"
+    var currentTime by remember {
+        mutableStateOf(SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date()))
+    }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            currentTime = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date())
+            kotlinx.coroutines.delay(10000L)
+        }
+    }
+
     if (!state.isExpanded) {
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 12.dp),
+                .padding(horizontal = 6.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            // Left of Punch-Hole: EVE Cyan Blinking Eyes
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            // EVE Eyes on Left
+            Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                 Box(
                     modifier = Modifier
-                        .size(width = 9.dp, height = 6.dp)
+                        .size(width = 8.dp, height = 5.dp)
                         .scale(scaleX = 1f, scaleY = eyeScaleY)
                         .clip(CircleShape)
                         .background(EveCyanGlow)
                 )
                 Box(
                     modifier = Modifier
-                        .size(width = 9.dp, height = 6.dp)
+                        .size(width = 8.dp, height = 5.dp)
                         .scale(scaleX = 1f, scaleY = eyeScaleY)
                         .clip(CircleShape)
                         .background(EveCyanGlow)
                 )
             }
 
-            // Right of Punch-Hole: Mini Wall-E Solar Bars
+            // Clean Clock Text in center matching photo
+            Text(
+                text = currentTime,
+                color = Color.White,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.SansSerif,
+                letterSpacing = (-0.2).sp
+            )
+
+            // Mini Solar Bars on Right
             Row(
                 verticalAlignment = Alignment.Bottom,
                 horizontalArrangement = Arrangement.spacedBy(2.dp)
@@ -305,8 +267,8 @@ private fun IdleModuleContent(state: IslandUiState) {
                 for (i in 1..4) {
                     Box(
                         modifier = Modifier
-                            .width(3.dp)
-                            .height((6 + i * 2).dp)
+                            .width(2.5.dp)
+                            .height((5 + i * 2).dp)
                             .clip(RoundedCornerShape(1.dp))
                             .background(if (i <= activeBars) WallESolarAmber else Color.White.copy(alpha = 0.25f))
                     )
@@ -317,7 +279,7 @@ private fun IdleModuleContent(state: IslandUiState) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(16.dp),
+                .padding(top = 18.dp, bottom = 12.dp, start = 8.dp, end = 8.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
             Row(
@@ -327,15 +289,17 @@ private fun IdleModuleContent(state: IslandUiState) {
             ) {
                 Column {
                     Text(
-                        text = "WALL-E × EVE OS",
-                        color = Color.White,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold
+                        text = "WALL-E NOTCH VISOR",
+                        color = WallESolarAmber,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace
                     )
                     Text(
-                        text = "Infinix GT 10 Pro • ${state.gaming.refreshRateHz}Hz Aktif",
-                        color = EveCyanGlow,
-                        fontSize = 12.sp
+                        text = "Infinix GT 10 Pro • 120Hz",
+                        color = Color.White,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold
                     )
                 }
                 PillActionButton(text = "Tutup", bg = Color.White.copy(alpha = 0.14f), fg = Color.White) {
@@ -350,7 +314,7 @@ private fun IdleModuleContent(state: IslandUiState) {
                 QuickModeTile(
                     modifier = Modifier.weight(1f),
                     title = "Musik",
-                    subtitle = "Audio",
+                    subtitle = "Audio Spotify",
                     accent = DirectivePlantGreen
                 ) {
                     IslandRepository.setMode(IslandMode.MUSIC, expand = true)
@@ -403,7 +367,7 @@ private fun MusicModuleContent(state: IslandUiState) {
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 12.dp),
+                .padding(horizontal = 6.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
@@ -413,7 +377,7 @@ private fun MusicModuleContent(state: IslandUiState) {
             ) {
                 Box(
                     modifier = Modifier
-                        .size(22.dp)
+                        .size(20.dp)
                         .clip(CircleShape)
                         .background(WallESolarAmber),
                     contentAlignment = Alignment.Center
@@ -421,30 +385,44 @@ private fun MusicModuleContent(state: IslandUiState) {
                     Text(
                         text = "W",
                         color = PitchBlack,
-                        fontSize = 12.sp,
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.Black
                     )
                 }
                 Text(
-                    text = music.title.substringBefore(" "),
+                    text = music.title,
                     color = Color.White,
                     fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.width(90.dp)
                 )
             }
 
             Row(
-                verticalAlignment = Alignment.Bottom,
-                horizontalArrangement = Arrangement.spacedBy(3.dp),
-                modifier = Modifier.height(16.dp)
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                val m1 = if (music.isPlaying) bar1 else 0.3f
-                val m2 = if (music.isPlaying) bar2 else 0.3f
-                val m3 = if (music.isPlaying) bar3 else 0.3f
-                Box(Modifier.width(3.dp).fillMaxHeight(m1).clip(CircleShape).background(EveCyanGlow))
-                Box(Modifier.width(3.dp).fillMaxHeight(m2).clip(CircleShape).background(WallESolarAmber))
-                Box(Modifier.width(3.dp).fillMaxHeight(m3).clip(CircleShape).background(DirectivePlantGreen))
+                Text(
+                    text = formatSeconds(state.callTimer.timerRemainingSec),
+                    color = WallESolarAmber,
+                    fontSize = 12.sp,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Bold
+                )
+                Row(
+                    verticalAlignment = Alignment.Bottom,
+                    horizontalArrangement = Arrangement.spacedBy(2.5.dp),
+                    modifier = Modifier.height(14.dp)
+                ) {
+                    val m1 = if (music.isPlaying) bar1 else 0.3f
+                    val m2 = if (music.isPlaying) bar2 else 0.3f
+                    val m3 = if (music.isPlaying) bar3 else 0.3f
+                    Box(Modifier.width(2.5.dp).fillMaxHeight(m1).clip(CircleShape).background(EveCyanGlow))
+                    Box(Modifier.width(2.5.dp).fillMaxHeight(m2).clip(CircleShape).background(WallESolarAmber))
+                    Box(Modifier.width(2.5.dp).fillMaxHeight(m3).clip(CircleShape).background(DirectivePlantGreen))
+                }
             }
         }
     } else {
@@ -457,7 +435,7 @@ private fun MusicModuleContent(state: IslandUiState) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(16.dp),
+                .padding(top = 18.dp, bottom = 12.dp, start = 8.dp, end = 8.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
             Row(
@@ -472,7 +450,7 @@ private fun MusicModuleContent(state: IslandUiState) {
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(40.dp)
+                            .size(38.dp)
                             .clip(RoundedCornerShape(12.dp))
                             .background(WallESolarAmber),
                         contentAlignment = Alignment.Center
@@ -507,12 +485,11 @@ private fun MusicModuleContent(state: IslandUiState) {
                 }
             }
 
-            // Progress Bar
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(6.dp)
+                        .height(5.dp)
                         .clip(CircleShape)
                         .background(Color.White.copy(alpha = 0.15f))
                 ) {
@@ -534,19 +511,18 @@ private fun MusicModuleContent(state: IslandUiState) {
                     Text(
                         text = formatSeconds((music.positionMs / 1000L).toInt()),
                         color = Color.White.copy(alpha = 0.65f),
-                        fontSize = 12.sp,
+                        fontSize = 11.sp,
                         fontFamily = FontFamily.Monospace
                     )
                     Text(
                         text = formatSeconds((music.durationMs / 1000L).toInt()),
                         color = Color.White.copy(alpha = 0.65f),
-                        fontSize = 12.sp,
+                        fontSize = 11.sp,
                         fontFamily = FontFamily.Monospace
                     )
                 }
             }
 
-            // Transport Controls
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -585,7 +561,7 @@ private fun SolarChargeModuleContent(state: IslandUiState) {
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 14.dp),
+                .padding(horizontal = 8.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
@@ -609,7 +585,7 @@ private fun SolarChargeModuleContent(state: IslandUiState) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(16.dp),
+                .padding(top = 18.dp, bottom = 12.dp, start = 8.dp, end = 8.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
             Row(
@@ -619,7 +595,7 @@ private fun SolarChargeModuleContent(state: IslandUiState) {
             ) {
                 Column {
                     Text(
-                        text = "WALL-E SOLAR CHARGE METER",
+                        text = "WALL-E SOLAR CHARGE",
                         color = WallESolarAmber,
                         fontSize = 12.sp,
                         fontFamily = FontFamily.Monospace,
@@ -641,7 +617,6 @@ private fun SolarChargeModuleContent(state: IslandUiState) {
                 )
             }
 
-            // 8-Bar Wall-E Solar Level Array
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(5.dp)
@@ -650,7 +625,7 @@ private fun SolarChargeModuleContent(state: IslandUiState) {
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .height(22.dp)
+                            .height(20.dp)
                             .clip(RoundedCornerShape(4.dp))
                             .background(
                                 if (i <= litBars) WallESolarAmber else Color.White.copy(alpha = 0.15f)
@@ -665,24 +640,13 @@ private fun SolarChargeModuleContent(state: IslandUiState) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Suhu: ${bat.temperatureCelsius}°C • ${bat.voltageMv}mV",
+                    text = "Suhu: ${bat.temperatureCelsius}°C",
                     color = Color.White.copy(alpha = 0.75f),
                     fontSize = 12.sp,
                     fontFamily = FontFamily.Monospace
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    PillActionButton(
-                        text = if (bat.bypassChargingEnabled) "Bypass: ON" else "Bypass: OFF",
-                        bg = if (bat.bypassChargingEnabled) DirectivePlantGreen else Color.White.copy(alpha = 0.15f),
-                        fg = if (bat.bypassChargingEnabled) PitchBlack else Color.White
-                    ) {
-                        IslandRepository.updateBattery(
-                            bat.copy(bypassChargingEnabled = !bat.bypassChargingEnabled)
-                        )
-                    }
-                    PillActionButton(text = "Tutup", bg = Color.White.copy(alpha = 0.14f), fg = Color.White) {
-                        IslandRepository.setExpanded(false)
-                    }
+                PillActionButton(text = "Tutup", bg = Color.White.copy(alpha = 0.14f), fg = Color.White) {
+                    IslandRepository.setExpanded(false)
                 }
             }
         }
@@ -702,7 +666,7 @@ private fun NotificationModuleContent(
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 12.dp),
+                .padding(horizontal = 8.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
@@ -712,7 +676,7 @@ private fun NotificationModuleContent(
             ) {
                 Box(
                     modifier = Modifier
-                        .size(22.dp)
+                        .size(20.dp)
                         .clip(CircleShape)
                         .background(DirectivePlantGreen),
                     contentAlignment = Alignment.Center
@@ -720,7 +684,7 @@ private fun NotificationModuleContent(
                     Text(
                         text = notif.appLabel,
                         color = PitchBlack,
-                        fontSize = 12.sp,
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -738,14 +702,14 @@ private fun NotificationModuleContent(
                 fontSize = 12.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.width(92.dp)
+                modifier = Modifier.width(96.dp)
             )
         }
     } else {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(16.dp),
+                .padding(top = 18.dp, bottom = 12.dp, start = 8.dp, end = 8.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
             Row(
@@ -774,7 +738,6 @@ private fun NotificationModuleContent(
                 }
             }
 
-            // Quick Reply Input Row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -818,7 +781,6 @@ private fun NotificationModuleContent(
                 }
             }
 
-            // Quick Preset Chips
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -848,7 +810,7 @@ private fun CallTimerModuleContent(state: IslandUiState) {
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 12.dp),
+                .padding(horizontal = 8.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
@@ -881,7 +843,7 @@ private fun CallTimerModuleContent(state: IslandUiState) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(16.dp),
+                .padding(top = 18.dp, bottom = 12.dp, start = 8.dp, end = 8.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
             Row(
@@ -891,11 +853,7 @@ private fun CallTimerModuleContent(state: IslandUiState) {
             ) {
                 Column {
                     Text(
-                        text = if (ct.isCallConnected) {
-                            "TERSAMBUNG • ${formatSeconds(ct.callDurationSec)}"
-                        } else {
-                            "PANGGILAN & TIMER AXIOM"
-                        },
+                        text = if (ct.isCallConnected) "TERSAMBUNG • ${formatSeconds(ct.callDurationSec)}" else "PANGGILAN AXIOM",
                         color = DirectivePlantGreen,
                         fontSize = 12.sp,
                         fontFamily = FontFamily.Monospace,
@@ -954,7 +912,7 @@ private fun GamingHudModuleContent(state: IslandUiState) {
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 12.dp),
+                .padding(horizontal = 8.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
@@ -977,7 +935,7 @@ private fun GamingHudModuleContent(state: IslandUiState) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(16.dp),
+                .padding(top = 18.dp, bottom = 12.dp, start = 8.dp, end = 8.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
             Row(
@@ -994,7 +952,7 @@ private fun GamingHudModuleContent(state: IslandUiState) {
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Dimensity 8050 • Gaming HUD",
+                        text = "Dimensity 8050 • Gaming Visor",
                         color = Color.White,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold
@@ -1064,13 +1022,13 @@ private fun PillActionButton(
             .clip(RoundedCornerShape(10.dp))
             .background(bg)
             .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 5.dp),
+            .padding(horizontal = 9.dp, vertical = 4.5.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text = text,
             color = fg,
-            fontSize = 12.sp,
+            fontSize = 11.sp,
             fontWeight = FontWeight.Bold
         )
     }
@@ -1101,7 +1059,7 @@ private fun QuickModeTile(
         Text(
             text = subtitle,
             color = Color.White.copy(alpha = 0.7f),
-            fontSize = 12.sp,
+            fontSize = 11.sp,
             maxLines = 1
         )
     }
