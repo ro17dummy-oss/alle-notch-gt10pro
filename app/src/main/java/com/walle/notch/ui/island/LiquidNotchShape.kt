@@ -10,13 +10,16 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 
 /**
- * 100% Mirror-Symmetric Liquid Notch matching the reference photo:
- * - Left S-curve: (0, 0) -> (cornerWidth, height)
- * - Horizontal flat bottom: (cornerWidth, height) -> (width - cornerWidth, height)
- * - Right S-curve: (width - cornerWidth, height) -> (width, 0) strictly mirrored
+ * 100% Mirror-Symmetric Liquid Notch with Continuous Squircle Bottom Corners:
+ * - Top Concave Ear Flare: (0, 0) -> (earW, earH) with 1:1 aspect ratio at the top bezel
+ * - Vertical Side Wall: (earW, earH) -> (earW, h - bottomCornerH) for clean straight sides when expanded
+ * - Bottom Convex Squircle Corner: (earW, h - bottomCornerH) -> (earW + bottomR, h) with 1:1 aspect ratio
+ * - Flat Horizontal Bottom: (earW + bottomR, h) -> (w - earW - bottomR, h)
+ * - Strictly mirrored right side: (w - earW - bottomR, h) -> (w, 0)
  */
 class LiquidNotchShape(
-    private val cornerWidth: Dp = 20.dp
+    private val cornerWidth: Dp = 36.dp,
+    private val bottomCornerRadius: Dp? = null
 ) : Shape {
 
     override fun createOutline(
@@ -24,58 +27,93 @@ class LiquidNotchShape(
         layoutDirection: LayoutDirection,
         density: Density
     ): Outline {
-        val cW = with(density) { cornerWidth.toPx() }.coerceAtMost(size.width / 2f)
-        val w = size.width
-        val h = size.height
+        return Outline.Generic(
+            buildLiquidNotchPath(
+                size = size,
+                density = density,
+                cornerWidth = cornerWidth,
+                bottomCornerRadius = bottomCornerRadius
+            )
+        )
+    }
 
-        val earW = cW * 0.42f
-        val earH = h * 0.46f
+    companion object {
+        fun buildLiquidNotchPath(
+            size: Size,
+            density: Density,
+            cornerWidth: Dp,
+            bottomCornerRadius: Dp? = null
+        ): Path {
+            val w = size.width
+            val h = size.height
+            val cW = with(density) { cornerWidth.toPx() }.coerceAtMost(w * 0.45f)
 
-        // Left side control points (Cubic Bézier S-curve)
-        val cp1x = earW * 0.55f
-        val cp1y = 0f
-        val cp2x = earW
-        val cp2y = earH * 0.45f
+            // Top bezel concave ear flare stays compact and crisp at the top edge
+            val earW = cW * 0.36f
+            val earH = earW.coerceAtMost(h * 0.42f)
 
-        val cp3x = earW
-        val cp3y = h - (h - earH) * 0.45f
-        val cp4x = cW - (cW - earW) * 0.55f
-        val cp4y = h
+            // Bottom convex corner radius: 64% of cornerWidth in standby, or explicit radius when expanded
+            val requestedBottomR = bottomCornerRadius?.let { with(density) { it.toPx() } } ?: (cW - earW)
+            val maxBottomR = ((w / 2f) - earW).coerceAtLeast(0f)
+            val bottomR = requestedBottomR.coerceAtMost(maxBottomR)
 
-        // Right side control points (EXACT mathematical mirror: x' = w - x)
-        val rcp3x = w - cp4x
-        val rcp3y = cp4y
-        val rcp4x = w - cp3x
-        val rcp4y = cp3y
+            // Keep 1:1 aspect ratio so expanding height never stretches the bottom corner vertically
+            val bottomCornerH = bottomR.coerceAtMost((h - earH).coerceAtLeast(0f))
+            val bottomStartY = (h - bottomCornerH).coerceAtLeast(earH)
+            val bottomEndX = earW + bottomR
 
-        val rcp1x = w - cp2x
-        val rcp1y = cp2y
-        val rcp2x = w - cp1x
-        val rcp2y = cp1y
+            // Bezier kappa constants: 0.55228 for top ear, 0.62 for smooth Apple-style bottom squircle
+            val kEar = 0.55228f
+            val kSquircle = 0.62f
 
-        val path = Path().apply {
-            moveTo(0f, 0f)
+            return Path().apply {
+                moveTo(0f, 0f)
 
-            // Left top flare arc
-            cubicTo(cp1x, cp1y, cp2x, cp2y, earW, earH)
+                // 1. Left Top Concave Ear Flare: (0, 0) -> (earW, earH)
+                cubicTo(
+                    earW * kEar, 0f,
+                    earW, earH * (1f - kEar),
+                    earW, earH
+                )
 
-            // Left bottom roundness arc
-            cubicTo(cp3x, cp3y, cp4x, cp4y, cW, h)
+                // 2. Left Vertical Side Wall: (earW, earH) -> (earW, bottomStartY)
+                if (bottomStartY > earH) {
+                    lineTo(earW, bottomStartY)
+                }
 
-            // Flat horizontal bottom
-            lineTo(w - cW, h)
+                // 3. Left Bottom Convex Squircle Corner: (earW, bottomStartY) -> (bottomEndX, h)
+                cubicTo(
+                    earW, bottomStartY + bottomCornerH * kSquircle,
+                    bottomEndX - bottomR * kSquircle, h,
+                    bottomEndX, h
+                )
 
-            // Right bottom roundness arc (mirrored)
-            cubicTo(rcp3x, rcp3y, rcp4x, rcp4y, w - earW, earH)
+                // 4. Flat Horizontal Bottom: (bottomEndX, h) -> (w - bottomEndX, h)
+                lineTo(w - bottomEndX, h)
 
-            // Right top flare arc (mirrored)
-            cubicTo(rcp1x, rcp1y, rcp2x, rcp2y, w, 0f)
+                // 5. Right Bottom Convex Squircle Corner (Exact Mirror): (w - bottomEndX, h) -> (w - earW, bottomStartY)
+                cubicTo(
+                    w - bottomEndX + bottomR * kSquircle, h,
+                    w - earW, bottomStartY + bottomCornerH * kSquircle,
+                    w - earW, bottomStartY
+                )
 
-            // Close along top bezel
-            lineTo(0f, 0f)
-            close()
+                // 6. Right Vertical Side Wall (Exact Mirror): (w - earW, bottomStartY) -> (w - earW, earH)
+                if (bottomStartY > earH) {
+                    lineTo(w - earW, earH)
+                }
+
+                // 7. Right Top Concave Ear Flare (Exact Mirror): (w - earW, earH) -> (w, 0)
+                cubicTo(
+                    w - earW, earH * (1f - kEar),
+                    w - earW * kEar, 0f,
+                    w, 0f
+                )
+
+                // 8. Close along top bezel
+                lineTo(0f, 0f)
+                close()
+            }
         }
-
-        return Outline.Generic(path)
     }
 }

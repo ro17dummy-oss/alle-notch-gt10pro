@@ -125,11 +125,11 @@ fun WallEDynamicIslandOverlay(
 
     val isHiddenInCamera = cal.autoHideLandscape && state.isLandscapeFullscreen && !state.isExpanded
 
-    // Tetap menggunakan proporsi kurva LiquidNotchShape baik saat Collapse maupun Expand
-    val cornerWidth = if (state.isExpanded) {
-        (cal.cornerWidthDp + 4).coerceAtMost(44).dp
+    val cornerWidth = cal.cornerWidthDp.dp
+    val targetBottomRadius = if (state.isExpanded) {
+        28.dp
     } else {
-        cal.cornerWidthDp.dp
+        (cal.cornerWidthDp * 0.64f).dp
     }
 
     val targetTotalWidth: Dp = when {
@@ -180,9 +180,30 @@ fun WallEDynamicIslandOverlay(
         label = "notchHeight"
     )
 
-    // 100% Mirror-Symmetric Liquid Notch Shape
-    val notchShape = remember(cornerWidth) {
-        LiquidNotchShape(cornerWidth = cornerWidth)
+    val animatedBottomRadius by animateDpAsState(
+        targetValue = targetBottomRadius,
+        animationSpec = spring(
+            dampingRatio = 0.74f,
+            stiffness = Spring.StiffnessMediumLow
+        ),
+        label = "notchBottomRadius"
+    )
+
+    val animatedHorizontalPad by animateDpAsState(
+        targetValue = if (state.isExpanded) 24.dp else cornerWidth,
+        animationSpec = spring(
+            dampingRatio = 0.74f,
+            stiffness = Spring.StiffnessMediumLow
+        ),
+        label = "notchHorizontalPad"
+    )
+
+    // 100% Mirror-Symmetric Liquid Notch Shape with 1:1 Bottom Squircle Corners
+    val notchShape = remember(cornerWidth, animatedBottomRadius) {
+        LiquidNotchShape(
+            cornerWidth = cornerWidth,
+            bottomCornerRadius = animatedBottomRadius
+        )
     }
 
     Box(
@@ -242,35 +263,27 @@ fun WallEDynamicIslandOverlay(
                         IslandRepository.cycleEveMood(context)
                     }
                 }
-            )
-            .padding(horizontal = cornerWidth),
+            ),
         contentAlignment = Alignment.TopCenter
     ) {
-        // Garis kilau kaca helm EVE tipis (Pixar Visor Glass Shine) saat di-expand
+        // Garis kontur kurva bawah halus (Bottom Squircle Rim Highlight) saat di-expand agar lengkungan bawah terlihat super rapi & presisi
         if (state.isExpanded) {
             Canvas(
-                modifier = Modifier
-                    .fillMaxSize()
+                modifier = Modifier.fillMaxSize()
             ) {
-                val shinePath = Path().apply {
-                    moveTo(size.width * 0.08f, size.height * 0.14f)
-                    quadraticBezierTo(
-                        size.width * 0.5f,
-                        size.height * 0.04f,
-                        size.width * 0.92f,
-                        size.height * 0.14f
-                    )
-                }
+                val rimPath = LiquidNotchShape.buildLiquidNotchPath(
+                    size = size,
+                    density = this,
+                    cornerWidth = cornerWidth,
+                    bottomCornerRadius = animatedBottomRadius
+                )
                 drawPath(
-                    path = shinePath,
-                    brush = Brush.horizontalGradient(
-                        listOf(
-                            Color.Transparent,
-                            EveCyanGlow.copy(alpha = 0.16f),
-                            Color.White.copy(alpha = 0.22f),
-                            EveCyanGlow.copy(alpha = 0.16f),
-                            Color.Transparent
-                        )
+                    path = rimPath,
+                    brush = Brush.verticalGradient(
+                        0.0f to Color.Transparent,
+                        0.45f to Color.Transparent,
+                        0.78f to Color.White.copy(alpha = 0.08f),
+                        1.0f to EveCyanGlow.copy(alpha = 0.24f)
                     ),
                     style = Stroke(width = 1.2.dp.toPx(), cap = StrokeCap.Round)
                 )
@@ -278,15 +291,22 @@ fun WallEDynamicIslandOverlay(
         }
 
         if (!isHiddenInCamera) {
-            when (state.mode) {
-                IslandMode.IDLE -> IdleModuleContent(state)
-                IslandMode.MUSIC -> MusicModuleContent(state)
-                IslandMode.SOLAR_CHARGE -> SolarChargeModuleContent(state)
-                IslandMode.NOTIFICATION -> NotificationModuleContent(
-                    state = state,
-                    onFocusInput = onRequestKeyboardFocus
-                )
-                IslandMode.CALL_TIMER -> CallTimerModuleContent(state)
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = animatedHorizontalPad),
+                contentAlignment = Alignment.TopCenter
+            ) {
+                when (state.mode) {
+                    IslandMode.IDLE -> IdleModuleContent(state)
+                    IslandMode.MUSIC -> MusicModuleContent(state)
+                    IslandMode.SOLAR_CHARGE -> SolarChargeModuleContent(state)
+                    IslandMode.NOTIFICATION -> NotificationModuleContent(
+                        state = state,
+                        onFocusInput = onRequestKeyboardFocus
+                    )
+                    IslandMode.CALL_TIMER -> CallTimerModuleContent(state)
+                }
             }
         }
 
