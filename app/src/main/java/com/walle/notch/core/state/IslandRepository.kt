@@ -33,11 +33,11 @@ object IslandRepository {
         val cal = IslandCalibration(
             offsetXDp = prefs.getInt("offsetXDp", 0),
             offsetYDp = prefs.getInt("offsetYDp", 0),
-            idleWidthDp = prefs.getInt("idleWidthDp", 186),
-            idleHeightDp = prefs.getInt("idleHeightDp", 36),
-            cornerWidthDp = prefs.getInt("cornerWidthDp", 20),
-            cameraHoleSizeDp = prefs.getInt("cameraHoleSizeDp", 16),
-            cameraTopOffsetDp = prefs.getInt("cameraTopOffsetDp", 5),
+            idleWidthDp = prefs.getInt("idleWidthDp", 220),
+            idleHeightDp = prefs.getInt("idleHeightDp", 44),
+            cornerWidthDp = prefs.getInt("cornerWidthDp", 30),
+            cameraHoleSizeDp = prefs.getInt("cameraHoleSizeDp", 23),
+            cameraTopOffsetDp = prefs.getInt("cameraTopOffsetDp", 6),
             splitPillEnabled = prefs.getBoolean("splitPillEnabled", true),
             autoHideLandscape = prefs.getBoolean("autoHideLandscape", true),
             xrayCameraGuide = prefs.getBoolean("xrayCameraGuide", false)

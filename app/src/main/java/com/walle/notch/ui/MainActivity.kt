@@ -64,28 +64,6 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         IslandRepository.loadCalibration(applicationContext)
 
-        // Read hardware DisplayCutout directly if available
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            window.decorView.post {
-                val insets = window.decorView.rootWindowInsets
-                val cutout = insets?.displayCutout
-                if (cutout != null) {
-                    val rect = cutout.boundingRectTop
-                    if (!rect.isEmpty) {
-                        val density = resources.displayMetrics.density
-                        val holeSize = (rect.width() / density).roundToInt()
-                        val topOffset = (rect.top / density).roundToInt()
-                        IslandRepository.updateCalibration(applicationContext) { cal ->
-                            cal.copy(
-                                cameraHoleSizeDp = if (holeSize in 10..26) holeSize else 16,
-                                cameraTopOffsetDp = if (topOffset in 0..16) topOffset else 5
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
         setContent {
             WallENotchTheme {
                 val state by IslandRepository.uiState.collectAsState()
@@ -139,7 +117,7 @@ private fun WallESettingsScreen(state: IslandUiState) {
                 fontWeight = FontWeight.Bold
             )
             Text(
-                text = "Kurva 100% simetris identik di kiri dan kanan, terkalibrasi presisi dengan punch-hole kamera depan Infinix GT 10 Pro.",
+                text = "Terkalibrasi presisi dengan punch-hole kamera Infinix GT 10 Pro: Lebar 220dp, Kurva 30dp, Kamera 23dp.",
                 color = Color.White.copy(alpha = 0.72f),
                 fontSize = 13.sp
             )
@@ -401,7 +379,7 @@ private fun WallESettingsScreen(state: IslandUiState) {
             }
         }
 
-        // Section 3: Camera Calibration & Symmetry Control
+        // Section 3: Hardware Camera Dimensions & Calibration
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -423,7 +401,7 @@ private fun WallESettingsScreen(state: IslandUiState) {
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = "Reset Hardware",
+                    text = "Reset Default",
                     color = EveCyanGlow,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
@@ -434,39 +412,48 @@ private fun WallESettingsScreen(state: IslandUiState) {
             }
 
             CalibrationSliderItem(
-                label = "Ukuran Lubang Kamera Punch-Hole",
-                valueText = "${cal.cameraHoleSizeDp} dp (~4.2mm)",
-                value = cal.cameraHoleSizeDp.toFloat(),
-                valueRange = 12f..24f
+                label = "Tinggi Notch (Height)",
+                valueText = "${cal.idleHeightDp} dp (Memberi ruang napas di bawah kamera)",
+                value = cal.idleHeightDp.toFloat(),
+                valueRange = 36f..54f
             ) { newVal ->
-                IslandRepository.updateCalibration(context) { it.copy(cameraHoleSizeDp = newVal.roundToInt()) }
-            }
-
-            CalibrationSliderItem(
-                label = "Jarak Kamera ke Bezel Atas (Top Offset)",
-                valueText = "${cal.cameraTopOffsetDp} dp (~1.4mm)",
-                value = cal.cameraTopOffsetDp.toFloat(),
-                valueRange = 0f..14f
-            ) { newVal ->
-                IslandRepository.updateCalibration(context) { it.copy(cameraTopOffsetDp = newVal.roundToInt()) }
-            }
-
-            CalibrationSliderItem(
-                label = "Lebar Lekukan Kurva (Corner Width)",
-                valueText = "${cal.cornerWidthDp} dp (Simetris Kiri & Kanan)",
-                value = cal.cornerWidthDp.toFloat(),
-                valueRange = 14f..30f
-            ) { newVal ->
-                IslandRepository.updateCalibration(context) { it.copy(cornerWidthDp = newVal.roundToInt()) }
+                IslandRepository.updateCalibration(context) { it.copy(idleHeightDp = newVal.roundToInt()) }
             }
 
             CalibrationSliderItem(
                 label = "Lebar Total Notch Saat Standby",
                 valueText = "${cal.idleWidthDp} dp",
                 value = cal.idleWidthDp.toFloat(),
-                valueRange = 140f..220f
+                valueRange = 160f..260f
             ) { newVal ->
                 IslandRepository.updateCalibration(context) { it.copy(idleWidthDp = newVal.roundToInt()) }
+            }
+
+            CalibrationSliderItem(
+                label = "Lebar Lekukan Kurva (Corner Width)",
+                valueText = "${cal.cornerWidthDp} dp (Simetris Kiri & Kanan)",
+                value = cal.cornerWidthDp.toFloat(),
+                valueRange = 16f..40f
+            ) { newVal ->
+                IslandRepository.updateCalibration(context) { it.copy(cornerWidthDp = newVal.roundToInt()) }
+            }
+
+            CalibrationSliderItem(
+                label = "Ukuran Lubang Kamera Punch-Hole",
+                valueText = "${cal.cameraHoleSizeDp} dp",
+                value = cal.cameraHoleSizeDp.toFloat(),
+                valueRange = 14f..28f
+            ) { newVal ->
+                IslandRepository.updateCalibration(context) { it.copy(cameraHoleSizeDp = newVal.roundToInt()) }
+            }
+
+            CalibrationSliderItem(
+                label = "Jarak Kamera ke Bezel Atas (Top Offset)",
+                valueText = "${cal.cameraTopOffsetDp} dp",
+                value = cal.cameraTopOffsetDp.toFloat(),
+                valueRange = 0f..14f
+            ) { newVal ->
+                IslandRepository.updateCalibration(context) { it.copy(cameraTopOffsetDp = newVal.roundToInt()) }
             }
 
             CalibrationToggleRow(

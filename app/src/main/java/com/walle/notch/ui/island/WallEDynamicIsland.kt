@@ -262,8 +262,8 @@ private fun IdleModuleContent(state: IslandUiState) {
                 )
             }
 
-            // Punch hole camera clear area in center (calibrated to 22dp for GT 10 Pro)
-            Spacer(modifier = Modifier.width(22.dp))
+            // Punch hole camera clear area in center (calibrated to match cameraHoleSizeDp)
+            Spacer(modifier = Modifier.width((state.calibration.cameraHoleSizeDp + 6).dp))
 
             // Right Side: Right Eye + Soft Blush / Accessory
             Row(
