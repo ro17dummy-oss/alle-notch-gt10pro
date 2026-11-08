@@ -22,6 +22,7 @@ import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -53,6 +54,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -186,7 +189,7 @@ fun WallEDynamicIslandOverlay(
         isHiddenInCamera -> cal.cameraHoleSizeDp.dp
         isAppPeek -> 64.dp
         state.isExpanded -> when (state.mode) {
-            IslandMode.IDLE -> 280.dp          // Giant EVE Visor
+            IslandMode.IDLE -> 318.dp          // Nusa Multi-Card Interactive Dashboard
             IslandMode.MUSIC -> 318.dp         // Nusa-style sleek music player
             IslandMode.SOLAR_CHARGE -> 296.dp  // Sleek solar charge visor
             IslandMode.NOTIFICATION -> 320.dp  // Clean quick reply card
@@ -205,7 +208,7 @@ fun WallEDynamicIslandOverlay(
         isHiddenInCamera -> cal.cameraHoleSizeDp.dp
         isAppPeek -> 4.dp
         state.isExpanded -> when (state.mode) {
-            IslandMode.IDLE -> 92.dp           // Giant EVE Visor
+            IslandMode.IDLE -> 110.dp          // Multi-Card Dashboard
             IslandMode.MUSIC -> 148.dp
             IslandMode.SOLAR_CHARGE -> 114.dp
             IslandMode.NOTIFICATION -> 110.dp  // Tinggi pas untuk balas cepat tanpa mubazir
@@ -605,113 +608,258 @@ private fun IdleModuleContent(state: IslandUiState) {
             }
         }
     } else {
-        // EXPANDED: GIANT LIVING EVE VISOR
-        Box(
+        // EXPANDED: NUSA MULTI-CARD INTERACTIVE DASHBOARD (Dapat diusap ke kiri/kanan secara manual)
+        var activeTab by remember { mutableStateOf(0) } // 0: Baterai & Daya, 1: Mini Musik, 2: Quick Tools
+
+        Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = 12.dp, bottom = 10.dp, start = 4.dp, end = 4.dp)
+                .padding(top = 8.dp, bottom = 6.dp, start = 8.dp, end = 8.dp)
+                .pointerInput(Unit) {
+                    var totalDragX = 0f
+                    detectHorizontalDragGestures(
+                        onDragStart = { totalDragX = 0f },
+                        onHorizontalDrag = { _, dragAmount ->
+                            totalDragX += dragAmount
+                            if (totalDragX < -28f) {
+                                activeTab = (activeTab + 1).coerceAtMost(2)
+                                totalDragX = 0f
+                            } else if (totalDragX > 28f) {
+                                activeTab = (activeTab - 1).coerceAtLeast(0)
+                                totalDragX = 0f
+                            }
+                        }
+                    )
+                },
+            verticalArrangement = Arrangement.SpaceBetween
         ) {
+            // Header Bar
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.Center)
-                    .offset(y = eyeFloatY.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                // Giant Left Wing: Soft Glowing Blush + Giant Left Eye
                 Row(
-                    modifier = Modifier.weight(1f),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Start
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
+                    val headerTitle = when (activeTab) {
+                        0 -> "GT 10 PRO · DAYA"
+                        1 -> "EVE · PEMUTAR MUSIK"
+                        else -> "KONTROL CEPAT · ALAT"
+                    }
+                    val headerColor = when (activeTab) {
+                        0 -> WallESolarAmber
+                        1 -> EveCyanGlow
+                        else -> DirectivePlantGreen
+                    }
                     Box(
                         modifier = Modifier
-                            .padding(top = 10.dp)
-                            .size(width = 13.dp, height = 7.dp)
+                            .size(7.dp)
                             .clip(CircleShape)
-                            .background(CuteBlushPink.copy(alpha = blushAlpha))
+                            .background(headerColor)
                     )
-                    Spacer(modifier = Modifier.width(7.dp))
-                    CuteEyeRenderer(
-                        mood = state.eveMood,
-                        isLeft = true,
-                        scaleY = eyeScaleY,
-                        heartScale = heartScale,
-                        sizeScale = 2.35f
+                    Text(
+                        text = headerTitle,
+                        color = headerColor,
+                        fontSize = 10.5.sp,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 0.5.sp
                     )
                 }
 
-                // Ruang tengah kamera fisik
-                Spacer(modifier = Modifier.width((state.calibration.cameraHoleSizeDp + 8).dp))
+                Spacer(modifier = Modifier.width((state.calibration.cameraHoleSizeDp + 6).dp))
 
-                // Giant Right Wing: Giant Right Eye + Soft Glowing Blush / Badge
-                Row(
-                    modifier = Modifier.weight(1f),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.End
+                PillActionButton(
+                    text = "✕",
+                    bg = Color.White.copy(alpha = 0.12f),
+                    fg = Color.White
                 ) {
-                    CuteEyeRenderer(
-                        mood = state.eveMood,
-                        isLeft = false,
-                        scaleY = eyeScaleY,
-                        heartScale = heartScale,
-                        sizeScale = 2.35f
-                    )
-                    Spacer(modifier = Modifier.width(7.dp))
-                    if (state.eveMood == EveMood.PLANT) {
-                        Text(
-                            text = "🌱",
-                            fontSize = 16.sp,
-                            modifier = Modifier.padding(top = 4.dp)
-                        )
-                    } else if (state.eveMood == EveMood.SLEEPY) {
-                        Text(
-                            text = "zZ",
-                            color = EveCyanGlow.copy(alpha = 0.85f),
-                            fontSize = 14.sp,
-                            fontFamily = FontFamily.Monospace,
-                            fontWeight = FontWeight.ExtraBold
-                        )
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .padding(top = 10.dp)
-                                .size(width = 13.dp, height = 7.dp)
-                                .clip(CircleShape)
-                                .background(CuteBlushPink.copy(alpha = blushAlpha))
-                        )
+                    IslandRepository.setExpanded(false)
+                }
+            }
+
+            // Card Body (Berganti sesuai kartu yang aktif)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .padding(vertical = 4.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                when (activeTab) {
+                    0 -> {
+                        // KARTU 1: Status Baterai & Performa Infinix GT 10 Pro
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Text(
+                                        text = "${state.battery.level}%",
+                                        color = Color.White,
+                                        fontSize = 22.sp,
+                                        fontWeight = FontWeight.Black,
+                                        fontFamily = FontFamily.Monospace
+                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(
+                                                if (state.battery.isFastCharging45W) WallESolarAmber.copy(alpha = 0.2f)
+                                                else Color.White.copy(alpha = 0.1f)
+                                            )
+                                            .border(
+                                                1.dp,
+                                                if (state.battery.isFastCharging45W) WallESolarAmber.copy(alpha = 0.5f)
+                                                else Color.White.copy(alpha = 0.2f),
+                                                RoundedCornerShape(6.dp)
+                                            )
+                                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                                    ) {
+                                        Text(
+                                            text = if (state.battery.isFastCharging45W) "45W BYPASS" else if (state.battery.isCharging) "CHARGING" else "STANDBY",
+                                            color = if (state.battery.isFastCharging45W) WallESolarAmber else Color(0xFF94A3B8),
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+
+                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Column(horizontalAlignment = Alignment.End) {
+                                    Text(text = "Suhu", color = Color(0xFF94A3B8), fontSize = 9.sp)
+                                    Text(
+                                        text = "${state.battery.temperatureCelsius}°C",
+                                        color = if (state.battery.temperatureCelsius > 40f) AxiomAlertRed else Color.White,
+                                        fontSize = 11.5.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                Column(horizontalAlignment = Alignment.End) {
+                                    Text(text = "Tegangan", color = Color(0xFF94A3B8), fontSize = 9.sp)
+                                    Text(
+                                        text = "${state.battery.voltageMv} mV",
+                                        color = Color.White,
+                                        fontSize = 11.5.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    1 -> {
+                        // KARTU 2: Mini Musik Kontrol
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = state.music.title,
+                                    color = Color.White,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = state.music.artist,
+                                    color = Color(0xFF94A3B8),
+                                    fontSize = 10.sp,
+                                    maxLines = 1
+                                )
+                            }
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                PillActionButton(text = "⏮", bg = Color.White.copy(alpha = 0.1f), fg = Color.White) {
+                                    IslandRepository.onMediaPrevious?.invoke()
+                                }
+                                PillActionButton(
+                                    text = if (state.music.isPlaying) "⏸" else "▶",
+                                    bg = EveCyanGlow,
+                                    fg = PitchBlack
+                                ) {
+                                    IslandRepository.onMediaPlayPause?.invoke()
+                                }
+                                PillActionButton(text = "⏭", bg = Color.White.copy(alpha = 0.1f), fg = Color.White) {
+                                    IslandRepository.onMediaNext?.invoke()
+                                }
+                            }
+                        }
+                    }
+                    else -> {
+                        // KARTU 3: Quick Action Tools
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            PillActionButton(
+                                modifier = Modifier.weight(1f),
+                                text = "💤 Tidur Cepat",
+                                bg = Color.White.copy(alpha = 0.1f),
+                                fg = EveCyanGlow
+                            ) {
+                                IslandRepository.triggerQuickNap()
+                                IslandRepository.setExpanded(false)
+                            }
+                            PillActionButton(
+                                modifier = Modifier.weight(1f),
+                                text = "☀️ Solar Charge",
+                                bg = Color.White.copy(alpha = 0.1f),
+                                fg = WallESolarAmber
+                            ) {
+                                IslandRepository.setMode(IslandMode.SOLAR_CHARGE, expand = true)
+                            }
+                            PillActionButton(
+                                modifier = Modifier.weight(1f),
+                                text = "👀 Bangunkan",
+                                bg = Color.White.copy(alpha = 0.1f),
+                                fg = Color.White
+                            ) {
+                                IslandRepository.restartEveIdleCountdown()
+                                IslandRepository.setExpanded(false)
+                            }
+                        }
                     }
                 }
             }
 
-            // Indikator titik mood minimalis di bagian paling bawah visor
+            // Indikator Titik Halaman Dashboard Bawah (Bisa ditekan atau diusap)
             Row(
                 modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .clickable {
-                        IslandRepository.setExpanded(false)
-                    }
+                    .fillMaxWidth()
                     .padding(bottom = 2.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                val moods = EveMood.values()
-                for (m in moods) {
-                    val isSelected = m == state.eveMood
+                for (i in 0..2) {
+                    val isSelected = i == activeTab
                     val dotWidth by animateDpAsState(
-                        targetValue = if (isSelected) 12.dp else 4.dp,
-                        label = "dotW"
+                        targetValue = if (isSelected) 14.dp else 4.dp,
+                        label = "tabDotW"
                     )
                     Box(
                         modifier = Modifier
+                            .padding(horizontal = 2.dp)
                             .height(3.5.dp)
                             .width(dotWidth)
                             .clip(CircleShape)
                             .background(
-                                if (isSelected) EveCyanGlow.copy(alpha = 0.85f)
-                                else Color.White.copy(alpha = 0.22f)
+                                if (isSelected) EveCyanGlow.copy(alpha = 0.9f)
+                                else Color.White.copy(alpha = 0.25f)
                             )
+                            .clickable { activeTab = i }
                     )
                 }
             }
@@ -1803,6 +1951,7 @@ private fun NotificationModuleContent(
         }
     }
     var replyText by remember { mutableStateOf("") }
+    val focusRequester = remember { FocusRequester() }
 
     if (!state.isExpanded) {
         // Mode Notif Biasa (Compact 202x36dp): Sisi Kiri Ikon Asli + Sender, Sisi Kanan Lonceng SVG
@@ -1904,12 +2053,20 @@ private fun NotificationModuleContent(
                 }
             }
 
-            // Message text preview box
+            // Message text preview box (tap untuk buka chat langsung di WhatsApp)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(8.dp))
                     .background(Color.White.copy(alpha = 0.05f))
+                    .clickable {
+                        notif.contentIntent?.let { pi ->
+                            try {
+                                pi.send()
+                                IslandRepository.dismissNotification()
+                            } catch (_: Exception) {}
+                        }
+                    }
                     .padding(horizontal = 8.dp, vertical = 5.dp)
             ) {
                 Text(
@@ -1935,7 +2092,10 @@ private fun NotificationModuleContent(
                         .clip(CircleShape)
                         .background(Color.White.copy(alpha = 0.10f))
                         .border(1.dp, appNeonColor.copy(alpha = 0.35f), CircleShape)
-                        .clickable { onFocusInput(true) }
+                        .clickable {
+                            onFocusInput(true)
+                            focusRequester.requestFocus()
+                        }
                         .padding(horizontal = 10.dp),
                     contentAlignment = Alignment.CenterStart
                 ) {
@@ -1960,7 +2120,9 @@ private fun NotificationModuleContent(
                             platformStyle = PlatformTextStyle(includeFontPadding = false)
                         ),
                         cursorBrush = SolidColor(appNeonColor),
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(focusRequester)
                     )
                 }
 

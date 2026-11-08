@@ -104,7 +104,9 @@ data class IslandUiState(
     val eveIdlePhase: EveIdlePhase = EveIdlePhase.AWAKE_BLINK,
     val isExpanded: Boolean = false,
     val isAppOpen: Boolean = false,                 // Sedang membuka aplikasi (bukan di Home Screen)
+    val isMenuOrDrawerOpen: Boolean = false,        // App Drawer atau menu usap di Home sedang dibuka
     val isNotificationShadeOpen: Boolean = false,   // Menu atas / status bar sedang digulir
+    val isKeyguardLocked: Boolean = false,          // Sedang di Lock Screen (hilang total)
     val isLandscapeHorizontal: Boolean = false,     // Layar sedang dalam posisi horizontal / landscape
     val isLandscapeFullscreen: Boolean = false,
     val calibration: IslandCalibration = IslandCalibration(),
@@ -116,11 +118,14 @@ data class IslandUiState(
     val isNotificationListenerConnected: Boolean = false,
     val lastFeedbackMessage: String? = null
 ) {
+    /** Notch mengecil ke sliver P1 (64x4dp) saat di dalam aplikasi atau saat usap menu/drawer di Home */
     val isAppPeek: Boolean
-        get() = calibration.hideWhenAppOpen && isAppOpen && mode == IslandMode.IDLE && !isExpanded && !isNotchHidden
+        get() = ((calibration.hideWhenAppOpen && isAppOpen) || isMenuOrDrawerOpen) &&
+            mode == IslandMode.IDLE && !isExpanded && !isNotchHidden
 
-    /** Notch disembunyikan total: landscape atau shade menu atas ditarik. */
+    /** Notch disembunyikan total (0dp / GONE): di Lock Screen, mode horizontal, atau shade status bar ditarik */
     val isNotchHidden: Boolean
-        get() = (calibration.hideWhenHorizontal && isLandscapeHorizontal) ||
+        get() = isKeyguardLocked ||
+            (calibration.hideWhenHorizontal && isLandscapeHorizontal) ||
             (calibration.hideWhenMenuScrolled && isNotificationShadeOpen && !isExpanded)
 }

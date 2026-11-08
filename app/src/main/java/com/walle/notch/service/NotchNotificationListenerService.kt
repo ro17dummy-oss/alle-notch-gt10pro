@@ -156,8 +156,34 @@ class NotchNotificationListenerService : NotificationListenerService() {
         val extras = notif.extras ?: return
 
         val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty()
-        val text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString().orEmpty()
-        if (title.isBlank() && text.isBlank()) return
+
+        // Ekstrak pesan chat dari MessagingStyle (WhatsApp, Telegram, Google Messages)
+        val messages = extras.getParcelableArray(Notification.EXTRA_MESSAGES)
+        var lastMessagingText: String? = null
+        var lastSenderName: String? = null
+        if (!messages.isNullOrEmpty()) {
+            val lastBundle = messages.last() as? Bundle
+            lastMessagingText = lastBundle?.getCharSequence("text")?.toString()
+            lastSenderName = lastBundle?.getCharSequence("sender")?.toString()
+        }
+
+        val resolvedText = lastMessagingText
+            ?: extras.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString()
+            ?: extras.getCharSequence(Notification.EXTRA_TEXT)?.toString()
+            ?: extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES)?.lastOrNull()?.toString()
+            ?: extras.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString()
+            ?: ""
+
+        val finalSender = (if (!lastSenderName.isNullOrBlank()) lastSenderName else title).ifBlank {
+            when {
+                pkg.contains("whatsapp", true) -> "WhatsApp"
+                pkg.contains("telegram", true) -> "Telegram"
+                pkg.contains("instagram", true) -> "Instagram"
+                else -> "Pesan Baru"
+            }
+        }
+
+        if (finalSender.isBlank() && resolvedText.isBlank()) return
 
         // Check if incoming call
         if (notif.category == Notification.CATEGORY_CALL) {
@@ -208,8 +234,8 @@ class NotchNotificationListenerService : NotificationListenerService() {
                 key = sbn.key ?: "",
                 packageName = pkg,
                 appLabel = appShort,
-                sender = title.ifBlank { appShort },
-                message = text,
+                sender = finalSender,
+                message = resolvedText,
                 contentIntent = notif.contentIntent,
                 replyActionIntent = replyIntent,
                 remoteInput = foundRemoteInput

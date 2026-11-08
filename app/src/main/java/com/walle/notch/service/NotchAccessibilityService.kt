@@ -1,7 +1,11 @@
 package com.walle.notch.service
 
 import android.accessibilityservice.AccessibilityService
+import android.app.KeyguardManager
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.PixelFormat
@@ -10,6 +14,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
+import android.view.inputmethod.InputMethodManager
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.ComposeView
@@ -55,6 +60,23 @@ class NotchAccessibilityService : AccessibilityService() {
         "com.miui.home"
     )
 
+    private val screenReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            when (intent?.action) {
+                Intent.ACTION_SCREEN_OFF -> {
+                    IslandRepository.setKeyguardLocked(true)
+                }
+                Intent.ACTION_USER_PRESENT -> {
+                    IslandRepository.setKeyguardLocked(false)
+                }
+                Intent.ACTION_SCREEN_ON -> {
+                    val km = getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
+                    IslandRepository.setKeyguardLocked(km?.isKeyguardLocked == true)
+                }
+            }
+        }
+    }
+
     override fun onServiceConnected() {
         super.onServiceConnected()
         IslandRepository.loadCalibration(applicationContext)
@@ -62,6 +84,18 @@ class NotchAccessibilityService : AccessibilityService() {
 
         val isLandscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
         IslandRepository.setLandscapeHorizontal(isLandscape)
+
+        val km = getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
+        IslandRepository.setKeyguardLocked(km?.isKeyguardLocked == true)
+
+        val filter = IntentFilter().apply {
+            addAction(Intent.ACTION_SCREEN_OFF)
+            addAction(Intent.ACTION_SCREEN_ON)
+            addAction(Intent.ACTION_USER_PRESENT)
+        }
+        try {
+            registerReceiver(screenReceiver, filter)
+        } catch (_: Exception) {}
 
         detectInstalledLaunchers()
 
@@ -135,10 +169,12 @@ class NotchAccessibilityService : AccessibilityService() {
             setViewTreeLifecycleOwner(owner)
             setViewTreeViewModelStoreOwner(owner)
             setViewTreeSavedStateRegistryOwner(owner)
-            // Sentuhan di luar notch (home screen disentuh/scroll) -> EVE bangun lalu blackout
+            // Sentuhan di luar notch HANYA aktif saat notch sedang Expand -> langsung collapse/tutup
             setOnTouchListener { _, ev ->
                 if (ev.actionMasked == MotionEvent.ACTION_OUTSIDE) {
-                    IslandRepository.onScreenTouched()
+                    if (IslandRepository.uiState.value.isExpanded) {
+                        IslandRepository.setExpanded(false)
+                    }
                 }
                 false
             }
@@ -192,8 +228,21 @@ class NotchAccessibilityService : AccessibilityService() {
         } else {
             (lp.flags or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)
         }
+        lp.softInputMode = if (focusable) {
+            WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE or
+                WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
+        } else {
+            WindowManager.LayoutParams.SOFT_INPUT_STATE_UNCHANGED
+        }
         try {
             wm.updateViewLayout(view, lp)
+            if (focusable) {
+                view.post {
+                    view.requestFocus()
+                    val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+                    imm?.showSoftInput(view, InputMethodManager.SHOW_IMPLICIT)
+                }
+            }
         } catch (_: Exception) {
         }
     }
@@ -210,14 +259,28 @@ class NotchAccessibilityService : AccessibilityService() {
         when (event.eventType) {
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
             AccessibilityEvent.TYPE_WINDOWS_CHANGED -> {
-                val pkg = event.packageName?.toString() ?: return
+                val km = getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
+                val isLocked = km?.isKeyguardLocked == true
+                IslandRepository.setKeyguardLocked(isLocked)
+                if (isLocked) return
+
+                val activeRootPkg = try { rootInActiveWindow?.packageName?.toString() } catch (_: Exception) { null }
+                val eventPkg = event.packageName?.toString().orEmpty()
                 val className = event.className?.toString().orEmpty()
 
-                val isLauncher = launcherPackages.contains(pkg)
-                val isSystemUi = pkg == "com.android.systemui"
-                val isSelf = pkg == packageName
+                // Target package: utamakan root foreground active window
+                val targetPkg = if (!activeRootPkg.isNullOrBlank() && activeRootPkg != "android") {
+                    activeRootPkg
+                } else {
+                    eventPkg
+                }
+                if (targetPkg.isBlank()) return
 
-                // Check if notification shade / quick settings panel is opened or scrolling
+                val isLauncher = launcherPackages.contains(targetPkg) || isDefaultLauncher(targetPkg)
+                val isSystemUi = targetPkg == "com.android.systemui"
+                val isSelf = targetPkg == packageName
+
+                // Notification Shade / Quick Settings status bar pull
                 val isShade = isSystemUi && (
                     className.contains("Notification", true) ||
                     className.contains("Panel", true) ||
@@ -226,12 +289,31 @@ class NotchAccessibilityService : AccessibilityService() {
                     className.contains("StatusBar", true)
                 )
 
-                // App is open when it's not home launcher, not systemui, and not our own app
+                // Menu drawer usap ke atas di Home Launcher
+                val isDrawer = isLauncher && (
+                    className.contains("Drawer", true) ||
+                    className.contains("AllApps", true) ||
+                    className.contains("AppsView", true) ||
+                    className.contains("Search", true)
+                )
+
+                // Sedang berada di aplikasi: bukan launcher, bukan systemui, bukan app sendiri
                 val isApp = !isLauncher && !isSystemUi && !isSelf
 
                 IslandRepository.setAppOpen(isApp)
+                IslandRepository.setMenuOrDrawerOpen(isDrawer)
                 IslandRepository.setNotificationShadeOpen(isShade)
             }
+        }
+    }
+
+    private fun isDefaultLauncher(pkg: String): Boolean {
+        return try {
+            val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+            val resolve = packageManager.resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY)
+            resolve?.activityInfo?.packageName == pkg
+        } catch (_: Exception) {
+            false
         }
     }
 
@@ -241,6 +323,9 @@ class NotchAccessibilityService : AccessibilityService() {
     override fun onDestroy() {
         super.onDestroy()
         IslandRepository.setOverlayServiceRunning(false)
+        try {
+            unregisterReceiver(screenReceiver)
+        } catch (_: Exception) {}
         systemMonitor?.stop()
         lifecycleOwner?.onDestroy()
         val wm = windowManager

@@ -143,6 +143,25 @@ object IslandRepository {
         }
     }
 
+    fun setKeyguardLocked(locked: Boolean) {
+        val wasLocked = _uiState.value.isKeyguardLocked
+        _uiState.update { it.copy(isKeyguardLocked = locked) }
+        if (locked && _uiState.value.isExpanded) {
+            setExpanded(false)
+        }
+        if (!locked && wasLocked) {
+            // Baru dibuka dari lock screen: bangunkan EVE menyapa
+            restartEveIdleCountdown()
+        }
+    }
+
+    fun setMenuOrDrawerOpen(isOpen: Boolean) {
+        _uiState.update { it.copy(isMenuOrDrawerOpen = isOpen) }
+        if (isOpen && _uiState.value.isExpanded) {
+            setExpanded(false)
+        }
+    }
+
     fun setNotificationShadeOpen(isShade: Boolean) {
         _uiState.update { it.copy(isNotificationShadeOpen = isShade) }
         if (isShade && _uiState.value.isExpanded) {
