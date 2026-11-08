@@ -135,6 +135,17 @@ class NotchWindowOverlayService : Service() {
             setViewTreeViewModelStoreOwner(owner)
             setViewTreeSavedStateRegistryOwner(owner)
 
+            setOnTouchListener { _, ev ->
+                if (ev.actionMasked == MotionEvent.ACTION_OUTSIDE) {
+                    if (IslandRepository.uiState.value.isExpanded) {
+                        IslandRepository.setExpanded(false)
+                    } else {
+                        IslandRepository.onScreenTouched()
+                    }
+                }
+                false
+            }
+
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 setOnApplyWindowInsetsListener { _, insets ->
                     val cutout = insets.displayCutout

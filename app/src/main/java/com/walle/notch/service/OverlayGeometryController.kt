@@ -11,17 +11,11 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /**
- * Jendela overlay dengan ukuran TETAP (bukan WRAP_CONTENT).
+ * Jendela overlay dengan lebar TETAP KONSTAN (326dp) agar Gravity.CENTER_HORIZONTAL
+ * tidak pernah menghitung ulang koordinat X (menghilangkan glitch lompat ke kanan/kiri 100%).
  *
- * WRAP_CONTENT membuat jendela di-resize setiap frame saat notch beranimasi; saat tumbuh dari
- * kecil ke normal, surface baru tertinggal satu-dua frame sehingga terlihat glitch/terpotong.
- * Dengan ukuran tetap, seluruh animasi berjalan di dalam surface yang sama (tanpa relayout jendela).
- *
- * - COMPACT: cukup untuk semua bentuk non-expanded (idle 202, musik 248, call 244, ...)
- * - LARGE  : cukup untuk bentuk expanded terbesar (320x148); dipakai saat expanded, dan
- *            baru dikecilkan setelah animasi collapse selesai.
- * - Saat mode peek (notch mengecil di dalam aplikasi) jendela dibuat NOT_TOUCHABLE agar
- *   area transparan tidak menghalangi sentuhan ke aplikasi di bawahnya.
+ * Selain itu, saat kembali dari garis tipis (peek -> normal), pemanggilan updateViewLayout
+ * ditunda sampai animasi membesar selesai (400ms) agar WindowManager tidak menyela animasi GPU.
  */
 class OverlayGeometryController(
     private val scope: CoroutineScope,
@@ -38,9 +32,8 @@ class OverlayGeometryController(
     }
 
     fun applyTo(lp: WindowManager.LayoutParams) {
-        val w = if (large) LARGE_W_DP else COMPACT_W_DP
         val h = if (large) LARGE_H_DP else COMPACT_H_DP
-        lp.width = (w * density).toInt()
+        lp.width = (FIXED_W_DP * density).toInt()
         lp.height = (h * density).toInt()
         var f = baseFlags
         if (!focusable) f = f or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
@@ -48,7 +41,6 @@ class OverlayGeometryController(
         lp.flags = f
     }
 
-    /** [update] dipanggil setiap geometri/flag berubah; implementasinya memanggil applyTo + updateViewLayout. */
     fun start(update: () -> Unit) {
         job?.cancel()
         job = scope.launch {
@@ -56,15 +48,29 @@ class OverlayGeometryController(
                 .map { it.isExpanded to it.isAppPeek }
                 .distinctUntilChanged()
                 .collectLatest { (expanded, peek) ->
-                    touchless = peek
                     if (expanded) {
+                        touchless = false
                         large = true
                         update()
-                    } else {
-                        update()
+                    } else if (peek) {
+                        // Saat mengecil ke garis tipis: langsung aktifkan touch-through
+                        touchless = true
                         if (large) {
                             delay(COLLAPSE_SETTLE_MS)
                             large = false
+                        }
+                        update()
+                    } else {
+                        // Saat kembali dari garis tipis ke ukuran normal (202x36dp):
+                        // JANGAN panggil updateViewLayout selama animasi membesar berlangsung!
+                        if (large) {
+                            delay(COLLAPSE_SETTLE_MS)
+                            large = false
+                            touchless = false
+                            update()
+                        } else if (touchless) {
+                            delay(GROW_SETTLE_MS)
+                            touchless = false
                             update()
                         }
                     }
@@ -78,10 +84,10 @@ class OverlayGeometryController(
     }
 
     companion object {
-        const val COMPACT_W_DP = 260
+        const val FIXED_W_DP = 326
         const val COMPACT_H_DP = 44
-        const val LARGE_W_DP = 336
         const val LARGE_H_DP = 164
-        private const val COLLAPSE_SETTLE_MS = 520L
+        private const val GROW_SETTLE_MS = 400L
+        private const val COLLAPSE_SETTLE_MS = 480L
     }
 }

@@ -456,8 +456,16 @@ private fun IdleModuleContent(state: IslandUiState) {
 
     if (!state.isExpanded) {
         // COLLAPSED STANDBY (202dp x 36dp)
-        // Jika sedang Touch Blackout, notch hitam murni tanpa konten
-        if (state.eveIdlePhase == EveIdlePhase.TOUCH_BLACKOUT) {
+        // Transisi halus antara aktivitas (TOUCH_BLACKOUT / hitam murni) dan standby (mata EVE menyala)
+        val standbyEyesAlpha by animateFloatAsState(
+            targetValue = if (state.eveIdlePhase == EveIdlePhase.TOUCH_BLACKOUT) 0f else 1f,
+            animationSpec = tween(
+                durationMillis = if (state.eveIdlePhase == EveIdlePhase.TOUCH_BLACKOUT) 120 else 280,
+                easing = FastOutSlowInEasing
+            ),
+            label = "standbyEyesAlpha"
+        )
+        if (standbyEyesAlpha <= 0.01f) {
             Box(modifier = Modifier.fillMaxSize())
             return
         }
@@ -510,6 +518,7 @@ private fun IdleModuleContent(state: IslandUiState) {
         Row(
             modifier = Modifier
                 .fillMaxSize()
+                .graphicsLayer { alpha = standbyEyesAlpha }
                 .padding(horizontal = 4.dp, vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween

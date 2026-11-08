@@ -118,14 +118,16 @@ data class IslandUiState(
     val isNotificationListenerConnected: Boolean = false,
     val lastFeedbackMessage: String? = null
 ) {
-    /** Notch mengecil ke sliver P1 (64x4dp) saat di dalam aplikasi atau saat usap menu/drawer di Home */
+    /** Notch mengecil ke garis tipis P1 (64x4dp) saat buka aplikasi, usap atas (drawer), atau usap bawah (shade) */
     val isAppPeek: Boolean
-        get() = ((calibration.hideWhenAppOpen && isAppOpen) || isMenuOrDrawerOpen) &&
-            mode == IslandMode.IDLE && !isExpanded && !isNotchHidden
+        get() = (
+            (calibration.hideWhenAppOpen && isAppOpen) ||
+                isMenuOrDrawerOpen ||
+                (calibration.hideWhenMenuScrolled && isNotificationShadeOpen)
+            ) && mode == IslandMode.IDLE && !isExpanded && !isNotchHidden
 
-    /** Notch disembunyikan total (0dp / GONE): di Lock Screen, mode horizontal, atau shade status bar ditarik */
+    /** Notch disembunyikan total (0dp / GONE): hanya di Lock Screen atau layar horizontal (landscape) */
     val isNotchHidden: Boolean
         get() = isKeyguardLocked ||
-            (calibration.hideWhenHorizontal && isLandscapeHorizontal) ||
-            (calibration.hideWhenMenuScrolled && isNotificationShadeOpen && !isExpanded)
+            (calibration.hideWhenHorizontal && isLandscapeHorizontal)
 }

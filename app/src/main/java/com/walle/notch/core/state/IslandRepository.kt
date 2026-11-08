@@ -132,15 +132,12 @@ object IslandRepository {
     }
 
     fun setAppOpen(isApp: Boolean) {
-        val wasAppOpen = _uiState.value.isAppOpen
+        val wasPeek = _uiState.value.isAppPeek
         _uiState.update { it.copy(isAppOpen = isApp) }
         if (isApp && _uiState.value.isExpanded && _uiState.value.mode == IslandMode.IDLE) {
             setExpanded(false)
         }
-        if (!isApp && wasAppOpen) {
-            // Kembali ke Home Screen: mulai siklus 10 detik standby EVE
-            restartEveIdleCountdown()
-        }
+        syncPeekLifecycle(wasPeek, _uiState.value.isAppPeek)
     }
 
     fun setKeyguardLocked(locked: Boolean) {
@@ -156,16 +153,42 @@ object IslandRepository {
     }
 
     fun setMenuOrDrawerOpen(isOpen: Boolean) {
+        val wasPeek = _uiState.value.isAppPeek
         _uiState.update { it.copy(isMenuOrDrawerOpen = isOpen) }
         if (isOpen && _uiState.value.isExpanded) {
             setExpanded(false)
         }
+        syncPeekLifecycle(wasPeek, _uiState.value.isAppPeek)
     }
 
     fun setNotificationShadeOpen(isShade: Boolean) {
+        val wasPeek = _uiState.value.isAppPeek
         _uiState.update { it.copy(isNotificationShadeOpen = isShade) }
         if (isShade && _uiState.value.isExpanded) {
             setExpanded(false)
+        }
+        syncPeekLifecycle(wasPeek, _uiState.value.isAppPeek)
+    }
+
+    /**
+     * Saat masuk ke garis tipis (App / Usap Atas / Usap Bawah): matikan timer tidur & buat menghitam (TOUCH_BLACKOUT).
+     * Saat kembali ke Home dari garis tipis: biarkan notch hitam polos selama animasi membesar (400ms),
+     * lalu jika user sudah diam baru munculkan mata EVE Standby.
+     */
+    private fun syncPeekLifecycle(wasPeek: Boolean, nowPeek: Boolean) {
+        if (nowPeek && !wasPeek) {
+            eveWakeJob?.cancel()
+            eveIdleCycleJob?.cancel()
+            _uiState.update { it.copy(eveIdlePhase = EveIdlePhase.TOUCH_BLACKOUT) }
+        } else if (!nowPeek && wasPeek) {
+            eveWakeJob?.cancel()
+            eveIdleCycleJob?.cancel()
+            _uiState.update { it.copy(eveIdlePhase = EveIdlePhase.TOUCH_BLACKOUT) }
+            eveWakeJob = repoScope.launch {
+                // Tunggu animasi membesar selesai dalam kondisi hitam murni, lalu masuk Standby jika layar diam
+                delay(1_200L)
+                restartEveIdleCountdown()
+            }
         }
     }
 
@@ -196,32 +219,33 @@ object IslandRepository {
     }
 
     /**
-     * Sentuhan Layar (Touch Event):
-     * Melek (400ms) ➔ Senyum ^_^ (500ms) ➔ Touch Blackout
+     * Aktivitas / Sentuhan Layar di Home:
+     * - Jika EVE sedang tidur -> Melek (350ms) -> Senyum ^_^ (450ms) -> Menghitam (TOUCH_BLACKOUT)
+     * - Jika EVE sedang melek biasa -> Langsung menghitam saja (TOUCH_BLACKOUT) selama ada aktivitas
+     * - Setelah layar diam 3 detik tanpa aktivitas -> Kembali ke EVE Standby
      */
     fun onScreenTouched() {
         val state = _uiState.value
-        // Saat app terbuka notch tersembunyi; saat EVE sedang bangun jangan diulang
-        if (state.isAppOpen || state.mode != IslandMode.IDLE) return
+        if (state.isAppPeek || state.isNotchHidden || state.mode != IslandMode.IDLE) return
         if (state.eveIdlePhase == EveIdlePhase.WAKE_OPEN || state.eveIdlePhase == EveIdlePhase.WAKE_SMILE) return
 
         eveIdleCycleJob?.cancel()
         eveWakeJob?.cancel()
 
-        val alreadyBlackout = state.eveIdlePhase == EveIdlePhase.TOUCH_BLACKOUT
+        val wasSleeping = state.eveIdlePhase == EveIdlePhase.SLEEPING_ZZZ ||
+            state.eveIdlePhase == EveIdlePhase.PRE_SLEEP_LOOK
+
         eveWakeJob = repoScope.launch {
-            if (!alreadyBlackout) {
-                // Tahap 1: Melek jelas (400ms)
+            if (wasSleeping) {
                 _uiState.update { it.copy(eveIdlePhase = EveIdlePhase.WAKE_OPEN) }
-                delay(400L)
-                // Tahap 2: Senyum manis ^_^ (500ms)
+                delay(350L)
                 _uiState.update { it.copy(eveIdlePhase = EveIdlePhase.WAKE_SMILE) }
-                delay(500L)
-                // Tahap 3: Blackout Notch bebas gangguan
-                _uiState.update { it.copy(eveIdlePhase = EveIdlePhase.TOUCH_BLACKOUT) }
+                delay(450L)
             }
-            // Tiap sentuhan baru memperpanjang blackout; diam 3.5 detik -> EVE standby lagi
-            delay(3_500L)
+            // Menghitam saja selama ada aktivitas
+            _uiState.update { it.copy(eveIdlePhase = EveIdlePhase.TOUCH_BLACKOUT) }
+            // Diam 3.0 detik tanpa aktivitas -> EVE standby muncul kembali
+            delay(3_000L)
             restartEveIdleCountdown()
         }
     }

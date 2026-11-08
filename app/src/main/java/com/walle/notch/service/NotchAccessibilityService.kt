@@ -191,11 +191,14 @@ class NotchAccessibilityService : AccessibilityService() {
             setViewTreeLifecycleOwner(owner)
             setViewTreeViewModelStoreOwner(owner)
             setViewTreeSavedStateRegistryOwner(owner)
-            // Sentuhan di luar notch HANYA aktif saat notch sedang Expand -> langsung collapse/tutup
+            // Sentuhan di luar notch: jika sedang Expand -> langsung collapse/tutup,
+            // jika sedang Collapse di Home -> mode aktivitas (menghitam / TOUCH_BLACKOUT)
             setOnTouchListener { _, ev ->
                 if (ev.actionMasked == MotionEvent.ACTION_OUTSIDE) {
                     if (IslandRepository.uiState.value.isExpanded) {
                         IslandRepository.setExpanded(false)
+                    } else {
+                        IslandRepository.onScreenTouched()
                     }
                 }
                 false
@@ -312,6 +315,9 @@ class NotchAccessibilityService : AccessibilityService() {
                     } else {
                         val drawerActive = isLauncherDrawerOrSearchVisible(screenHeight)
                         IslandRepository.setMenuOrDrawerOpen(drawerActive)
+                        if (!drawerActive) {
+                            IslandRepository.onScreenTouched()
+                        }
                     }
                 }
             }
