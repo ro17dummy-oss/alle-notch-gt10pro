@@ -23,6 +23,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -106,6 +107,28 @@ private enum class MediaIconType {
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun WallEDynamicIslandOverlay(
+    state: IslandUiState,
+    onRequestKeyboardFocus: (Boolean) -> Unit
+) {
+    // Jendela overlay berukuran tetap: notch dirata atas-tengah, area transparan di sekitarnya
+    // hanya dipakai untuk "tap di luar notch" -> collapse saat sedang expand.
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .pointerInput(state.isExpanded) {
+                detectTapGestures {
+                    if (state.isExpanded) IslandRepository.setExpanded(false)
+                }
+            },
+        contentAlignment = Alignment.TopCenter
+    ) {
+        NotchBody(state = state, onRequestKeyboardFocus = onRequestKeyboardFocus)
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun NotchBody(
     state: IslandUiState,
     onRequestKeyboardFocus: (Boolean) -> Unit
 ) {

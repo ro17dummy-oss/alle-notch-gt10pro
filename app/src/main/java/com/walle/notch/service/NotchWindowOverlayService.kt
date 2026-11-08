@@ -31,6 +31,9 @@ import com.walle.notch.R
 import com.walle.notch.core.state.IslandRepository
 import com.walle.notch.ui.island.WallEDynamicIslandOverlay
 import com.walle.notch.ui.theme.WallENotchTheme
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlin.math.roundToInt
 
 class NotchWindowOverlayService : Service() {
@@ -40,6 +43,8 @@ class NotchWindowOverlayService : Service() {
     private var layoutParams: WindowManager.LayoutParams? = null
     private var lifecycleOwner: ServiceLifecycleOwner? = null
     private var systemMonitor: SystemMonitorManager? = null
+    private var geometry: OverlayGeometryController? = null
+    private val serviceScope = CoroutineScope(Dispatchers.Main + Job())
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -100,20 +105,29 @@ class NotchWindowOverlayService : Service() {
             WindowManager.LayoutParams.TYPE_PHONE
         }
 
+        val controller = OverlayGeometryController(
+            scope = serviceScope,
+            density = density,
+            baseFlags = WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+        )
+        geometry = controller
+
+        // Ukuran jendela TETAP agar animasi notch tidak memicu resize jendela tiap frame
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
             overlayType,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
             x = (cal.offsetXDp * density).toInt()
             y = 0
         }
+        controller.applyTo(params)
         layoutParams = params
 
         val view = ComposeView(this).apply {
@@ -159,22 +173,23 @@ class NotchWindowOverlayService : Service() {
             wm.addView(view, params)
         } catch (_: Exception) {
         }
+        controller.start { updateOverlayLayout() }
     }
 
-    private fun setOverlayFocusable(focusable: Boolean) {
+    private fun updateOverlayLayout() {
         val wm = windowManager ?: return
         val view = composeView ?: return
         val lp = layoutParams ?: return
-
-        lp.flags = if (focusable) {
-            (lp.flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE.inv())
-        } else {
-            (lp.flags or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)
-        }
+        geometry?.applyTo(lp)
         try {
             wm.updateViewLayout(view, lp)
         } catch (_: Exception) {
         }
+    }
+
+    private fun setOverlayFocusable(focusable: Boolean) {
+        geometry?.setFocusable(focusable)
+        updateOverlayLayout()
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
@@ -187,6 +202,7 @@ class NotchWindowOverlayService : Service() {
         super.onDestroy()
         IslandRepository.setOverlayServiceRunning(false)
         systemMonitor?.stop()
+        geometry?.stop()
         lifecycleOwner?.onDestroy()
         val wm = windowManager
         val view = composeView

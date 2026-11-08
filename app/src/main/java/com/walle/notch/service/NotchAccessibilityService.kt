@@ -54,6 +54,7 @@ class NotchAccessibilityService : AccessibilityService() {
     private val serviceScope = CoroutineScope(Dispatchers.Main + Job())
     private var launcherScrollResetJob: Job? = null
     private var lastKnownAppPkg: String = ""
+    private var geometry: OverlayGeometryController? = null
 
     private val launcherPackages = mutableSetOf(
         "com.transsion.XOSLauncher",
@@ -161,21 +162,29 @@ class NotchAccessibilityService : AccessibilityService() {
         val density = resources.displayMetrics.density
         val cal = IslandRepository.uiState.value.calibration
 
+        val controller = OverlayGeometryController(
+            scope = serviceScope,
+            density = density,
+            baseFlags = WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+        )
+        geometry = controller
+
+        // Ukuran jendela TETAP agar animasi notch tidak memicu resize jendela tiap frame
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-                WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH or
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
             x = (cal.offsetXDp * density).toInt()
             y = 0
         }
+        controller.applyTo(params)
         layoutParams = params
 
         val view = ComposeView(this).apply {
@@ -209,6 +218,18 @@ class NotchAccessibilityService : AccessibilityService() {
             wm.addView(view, params)
         } catch (_: Exception) {
         }
+        controller.start { updateOverlayLayout() }
+    }
+
+    private fun updateOverlayLayout() {
+        val wm = windowManager ?: return
+        val view = composeView ?: return
+        val lp = layoutParams ?: return
+        geometry?.applyTo(lp)
+        try {
+            wm.updateViewLayout(view, lp)
+        } catch (_: Exception) {
+        }
     }
 
     private fun observeCalibrationOffsets() {
@@ -236,11 +257,8 @@ class NotchAccessibilityService : AccessibilityService() {
         val view = composeView ?: return
         val lp = layoutParams ?: return
 
-        lp.flags = if (focusable) {
-            (lp.flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE.inv())
-        } else {
-            (lp.flags or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)
-        }
+        geometry?.setFocusable(focusable)
+        geometry?.applyTo(lp)
         lp.softInputMode = if (focusable) {
             WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE or
                 WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
@@ -574,6 +592,7 @@ class NotchAccessibilityService : AccessibilityService() {
             unregisterReceiver(screenReceiver)
         } catch (_: Exception) {}
         systemMonitor?.stop()
+        geometry?.stop()
         lifecycleOwner?.onDestroy()
         val wm = windowManager
         val view = composeView
