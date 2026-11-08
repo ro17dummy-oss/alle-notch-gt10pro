@@ -215,7 +215,6 @@ fun WallEDynamicIslandOverlay(
         targetValue = when {
             isAppPeek -> 0.dp
             state.isExpanded -> 24.dp
-            state.mode == IslandMode.NOTIFICATION -> 10.dp
             else -> cornerWidth
         },
         animationSpec = spring(
@@ -1792,6 +1791,77 @@ private fun AuthenticAppIcon(
     }
 }
 
+/**
+ * Komponen Ikon Lonceng Berdering SVG Monokrom (Tanpa Neon)
+ */
+@Composable
+private fun RingingBellIcon(
+    modifier: Modifier = Modifier
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "bellRing")
+    val bellRotation by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 0f,
+        animationSpec = infiniteRepeatable(
+            animation = keyframes {
+                durationMillis = 1600
+                0f at 0
+                15f at 160
+                -13f at 320
+                11f at 480
+                -8f at 640
+                4f at 800
+                0f at 960
+                0f at 1600
+            },
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "bellRotation"
+    )
+
+    Box(
+        modifier = modifier.size(18.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Canvas(
+            modifier = Modifier
+                .size(16.dp)
+                .rotate(bellRotation)
+        ) {
+            val w = size.width
+            val h = size.height
+
+            // Badan Lonceng SVG
+            val bellPath = Path().apply {
+                moveTo(w * 0.44f, h * 0.12f)
+                quadraticBezierTo(w * 0.50f, h * 0.02f, w * 0.56f, h * 0.12f)
+                quadraticBezierTo(w * 0.78f, h * 0.22f, w * 0.78f, h * 0.60f)
+                quadraticBezierTo(w * 0.82f, h * 0.78f, w * 0.92f, h * 0.82f)
+                lineTo(w * 0.08f, h * 0.82f)
+                quadraticBezierTo(w * 0.18f, h * 0.78f, w * 0.18f, h * 0.60f)
+                quadraticBezierTo(w * 0.22f, h * 0.22f, w * 0.44f, h * 0.12f)
+                close()
+            }
+            drawPath(
+                path = bellPath,
+                color = Color.White,
+                style = Stroke(width = 1.7.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+            )
+
+            // Bandul Lonceng Bawah
+            val clapperPath = Path().apply {
+                moveTo(w * 0.41f, h * 0.86f)
+                quadraticBezierTo(w * 0.50f, h * 0.98f, w * 0.59f, h * 0.86f)
+            }
+            drawPath(
+                path = clapperPath,
+                color = Color.White,
+                style = Stroke(width = 1.7.dp.toPx(), cap = StrokeCap.Round)
+            )
+        }
+    }
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun NotificationModuleContent(
@@ -1817,29 +1887,40 @@ private fun NotificationModuleContent(
     val focusRequester = remember { FocusRequester() }
 
     if (!state.isExpanded) {
-        // Mode Notif Biasa (Compact 202x36dp): Cukup tampilkan logo ikon SVG aplikasi/sosmed saja (tanpa teks & tanpa neon)
+        // Mode Notif Biasa (Compact 202x36dp): Posisi Logo SVG (Kiri) & Animasi Lonceng SVG (Kanan)
+        // persis sejajar dengan posisi Mata Kiri & Mata Kanan EVE
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 8.dp, vertical = 2.dp),
+                .padding(horizontal = 4.dp, vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Box(
+            // Left Wing: Posisi Mata Kiri EVE -> Logo SVG Sosial Media / Aplikasi
+            Row(
                 modifier = Modifier.weight(1f),
-                contentAlignment = Alignment.Center
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.End
             ) {
                 AuthenticAppIcon(
                     packageName = notif.packageName,
-                    sizeDp = 20.dp
+                    sizeDp = 18.dp
                 )
+                Spacer(modifier = Modifier.width(6.dp))
             }
 
-            // Punch hole camera clearance space (23dp + margin)
-            Spacer(modifier = Modifier.width((state.calibration.cameraHoleSizeDp + 8).dp))
+            // Punch hole camera clear area in center (persis sama dengan EVE: cameraHoleSizeDp + 6.dp)
+            Spacer(modifier = Modifier.width((state.calibration.cameraHoleSizeDp + 6).dp))
 
-            // Sisi kanan dikosongkan agar ringan dan fokus pada logo ikon sosmed
-            Spacer(modifier = Modifier.weight(1f))
+            // Right Wing: Posisi Mata Kanan EVE -> Animasi Lonceng Berdering SVG
+            Row(
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Start
+            ) {
+                Spacer(modifier = Modifier.width(6.dp))
+                RingingBellIcon()
+            }
         }
     } else {
         // Mode Expand Balas Chat (320x110dp)
