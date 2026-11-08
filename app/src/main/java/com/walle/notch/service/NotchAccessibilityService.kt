@@ -277,25 +277,21 @@ class NotchAccessibilityService : AccessibilityService() {
         val eventType = event.eventType
         val eventPkg = event.packageName?.toString().orEmpty()
         val className = event.className?.toString().orEmpty()
+        val screenWidth = resources.displayMetrics.widthPixels
         val screenHeight = resources.displayMetrics.heightPixels
 
         when (eventType) {
             AccessibilityEvent.TYPE_VIEW_SCROLLED -> {
-                // Saat di Home Launcher, jika user mengusap ke atas / ke bawah (scroll vertikal), langsung kecilkan EVE
+                // Saat di Home Launcher, periksa apakah yang di-scroll adalah App Drawer (AllApps) atau halaman Workspace biasa
                 if (!IslandRepository.uiState.value.isAppOpen && isLauncherPackage(eventPkg)) {
-                    val isVerticalScroll = event.maxScrollY > 0 ||
-                        event.scrollY > 0 ||
-                        className.contains("RecyclerView", ignoreCase = true) ||
-                        className.contains("GridView", ignoreCase = true) ||
-                        className.contains("ScrollView", ignoreCase = true) ||
-                        className.contains("AllApps", ignoreCase = true) ||
+                    val isExplicitDrawerScroll = className.contains("AllApps", ignoreCase = true) ||
+                        className.contains("AppsView", ignoreCase = true) ||
                         className.contains("Drawer", ignoreCase = true)
 
-                    if (isVerticalScroll) {
+                    if (isExplicitDrawerScroll) {
                         IslandRepository.setMenuOrDrawerOpen(true)
                         scheduleLauncherDrawerRecheck(screenHeight)
                     } else {
-                        // Usap halaman Home (PagedView / Workspace): cek apakah App Drawer / Search terbuka
                         val drawerActive = isLauncherDrawerOrSearchVisible(screenHeight)
                         IslandRepository.setMenuOrDrawerOpen(drawerActive)
                     }
@@ -313,7 +309,7 @@ class NotchAccessibilityService : AccessibilityService() {
                 ) {
                     return
                 }
-                evaluateWindowsAndState(eventType, eventPkg, className, screenHeight)
+                evaluateWindowsAndState(eventType, eventPkg, className, screenWidth, screenHeight)
             }
         }
     }
@@ -322,11 +318,16 @@ class NotchAccessibilityService : AccessibilityService() {
         eventType: Int,
         eventPkg: String,
         className: String,
+        screenWidth: Int,
         screenHeight: Int
     ) {
         var shadeOpenFromWindows = false
         var imeVisible = false
-        var topAppPkg: String? = null
+        var focusedAppPkg: String? = null
+        var fallbackFullscreenAppPkg: String? = null
+
+        val activeRoot = try { rootInActiveWindow } catch (_: Exception) { null }
+        val activeRootPkg = try { activeRoot?.packageName?.toString() } catch (_: Exception) { null }
 
         try {
             val winList = windows
@@ -343,21 +344,30 @@ class NotchAccessibilityService : AccessibilityService() {
                         AccessibilityWindowInfo.TYPE_SYSTEM -> {
                             val wPkg = try { w.root?.packageName?.toString() } catch (_: Exception) { null }
                             w.getBoundsInScreen(rect)
-                            // Panel notifikasi / Control Center ketika diusap ke bawah menutupi > 35% tinggi layar
-                            if ((wPkg == null || wPkg == "com.android.systemui") &&
-                                rect.height() > (screenHeight * 0.35f).toInt()
+                            // Panel notifikasi / Control Center ketika diusap ke bawah menjadi window aktif & tinggi penuh
+                            if ((w.isActive || w.isFocused || activeRootPkg == "com.android.systemui") &&
+                                (wPkg == null || wPkg == "com.android.systemui") &&
+                                rect.height() > (screenHeight * 0.45f).toInt()
                             ) {
                                 shadeOpenFromWindows = true
                             }
                         }
                         AccessibilityWindowInfo.TYPE_APPLICATION -> {
-                            if (topAppPkg == null) {
+                            w.getBoundsInScreen(rect)
+                            val isFullscreenApp = rect.width() > (screenWidth * 0.65f).toInt() &&
+                                rect.height() > (screenHeight * 0.55f).toInt()
+                            if (isFullscreenApp) {
                                 val wPkg = try { w.root?.packageName?.toString() } catch (_: Exception) { null }
                                 if (!wPkg.isNullOrBlank() &&
                                     wPkg != packageName &&
                                     !isTransientOrSystemPackage(wPkg)
                                 ) {
-                                    topAppPkg = wPkg
+                                    if ((w.isFocused || w.isActive) && focusedAppPkg == null) {
+                                        focusedAppPkg = wPkg
+                                    }
+                                    if (fallbackFullscreenAppPkg == null) {
+                                        fallbackFullscreenAppPkg = wPkg
+                                    }
                                 }
                             }
                         }
@@ -366,8 +376,6 @@ class NotchAccessibilityService : AccessibilityService() {
             }
         } catch (_: Exception) {
         }
-
-        val activeRootPkg = try { rootInActiveWindow?.packageName?.toString() } catch (_: Exception) { null }
 
         // 1. Deteksi Notification Shade / Quick Settings (usap ke bawah dari atas layar)
         val shadeFromEvent = eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
@@ -381,13 +389,14 @@ class NotchAccessibilityService : AccessibilityService() {
         val isShadeOpen = shadeOpenFromWindows || shadeFromEvent
         IslandRepository.setNotificationShadeOpen(isShadeOpen)
 
-        // 2. Tentukan aplikasi foreground yang sesungguhnya (abaikan SystemUI, Back ripple, Volume, Keyboard)
+        // 2. Utamakan rootInActiveWindow (window yang benar-benar sedang aktif/fokus di layar!)
         val candidatePkg = when {
-            !topAppPkg.isNullOrBlank() -> topAppPkg
             !activeRootPkg.isNullOrBlank() && !isTransientOrSystemPackage(activeRootPkg) -> activeRootPkg
+            !focusedAppPkg.isNullOrBlank() -> focusedAppPkg
             eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
                 eventPkg.isNotBlank() &&
                 !isTransientOrSystemPackage(eventPkg) -> eventPkg
+            !fallbackFullscreenAppPkg.isNullOrBlank() -> fallbackFullscreenAppPkg
             else -> lastKnownAppPkg
         }
 
@@ -406,7 +415,7 @@ class NotchAccessibilityService : AccessibilityService() {
         }
 
         if (isLauncher) {
-            // Benar-benar sudah keluar dari aplikasi dan berada di Home Launcher
+            // Benar-benar berada di Home Launcher
             IslandRepository.setAppOpen(false)
 
             val drawerClassMatch = eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
@@ -414,12 +423,10 @@ class NotchAccessibilityService : AccessibilityService() {
                     className.contains("Drawer", ignoreCase = true) ||
                     className.contains("AllApps", ignoreCase = true) ||
                     className.contains("AppsView", ignoreCase = true) ||
-                    className.contains("Search", ignoreCase = true) ||
-                    className.contains("HiBoard", ignoreCase = true) ||
-                    className.contains("ZeroScreen", ignoreCase = true)
+                    className.contains("Search", ignoreCase = true)
                 )
 
-            // Jika di Home Launcher lalu keyboard muncul (misal usap bawah buka Global Search) atau App Drawer terbuka
+            // Di Home: mengecil HANYA jika keyboard pencarian muncul (usap bawah Search) atau App Drawer terbuka (usap atas)
             val drawerOrSearchVisible = drawerClassMatch ||
                 imeVisible ||
                 isLauncherDrawerOrSearchVisible(screenHeight)
@@ -436,7 +443,7 @@ class NotchAccessibilityService : AccessibilityService() {
     private fun scheduleLauncherDrawerRecheck(screenHeight: Int) {
         launcherScrollResetJob?.cancel()
         launcherScrollResetJob = serviceScope.launch {
-            delay(500)
+            delay(450)
             if (!IslandRepository.uiState.value.isAppOpen) {
                 val stillOpen = isLauncherDrawerOrSearchVisible(screenHeight)
                 IslandRepository.setMenuOrDrawerOpen(stillOpen)
@@ -444,72 +451,76 @@ class NotchAccessibilityService : AccessibilityService() {
         }
     }
 
+    private data class LauncherTreeResult(
+        var hasWorkspaceOrHotseat: Boolean = false,
+        var hasAllAppsOrSearch: Boolean = false,
+        var hasFocusedSearchInput: Boolean = false
+    )
+
     private fun isLauncherDrawerOrSearchVisible(screenHeight: Int): Boolean {
         val root = try { rootInActiveWindow } catch (_: Exception) { null } ?: return false
         val rootPkg = root.packageName?.toString().orEmpty()
         if (!isLauncherPackage(rootPkg)) return false
 
         return try {
-            checkNodeForDrawerOrSearch(root, screenHeight, depth = 0)
+            val result = LauncherTreeResult()
+            scanLauncherNodes(root, screenHeight, depth = 0, result = result)
+            // Jika input pencarian fokus -> pasti sedang di Search
+            // Jika AllApps/Drawer aktif DAN Workspace/Hotseat tidak terlihat -> sedang di App Drawer
+            result.hasFocusedSearchInput || (result.hasAllAppsOrSearch && !result.hasWorkspaceOrHotseat)
         } catch (_: Exception) {
             false
         }
     }
 
-    private fun checkNodeForDrawerOrSearch(
+    private fun scanLauncherNodes(
         node: AccessibilityNodeInfo,
         screenHeight: Int,
-        depth: Int
-    ): Boolean {
-        if (depth > 7 || !node.isVisibleToUser) return false
+        depth: Int,
+        result: LauncherTreeResult
+    ) {
+        if (depth > 8 || !node.isVisibleToUser) return
 
         val id = node.viewIdResourceName?.lowercase().orEmpty()
         val cls = node.className?.toString().orEmpty()
         val rect = Rect()
         node.getBoundsInScreen(rect)
 
-        // 1. Jika ada kolom input pencarian (EditText) yang sedang fokus di Home / App Drawer / Global Search
+        // 1. Jika ada EditText pencarian yang sedang fokus di Launcher
         if (cls.contains("EditText", ignoreCase = true) && node.isFocused) {
-            return true
+            result.hasFocusedSearchInput = true
+            return
         }
 
-        // 2. Deteksi container App Drawer / Global Search berdasarkan ID view di XOSLauncher / Launcher3
-        if (id.contains("all_apps") ||
-            id.contains("apps_view") ||
-            id.contains("apps_list") ||
-            id.contains("drawer") ||
-            id.contains("global_search") ||
-            id.contains("branch_search") ||
-            id.contains("search_container") ||
-            id.contains("zero_screen") ||
-            id.contains("hiboard")
+        // 2. Cek apakah Workspace / Hotseat (halaman utama Home Screen) sedang terlihat oleh user
+        if (id.contains("workspace") ||
+            id.contains("hotseat") ||
+            id.contains("cell_layout") ||
+            id.contains("page_indicator")
         ) {
-            // Pastikan container tersebut sedang ditarik ke atas layar (bukan tersembunyi di bawah layar)
-            if (rect.top < (screenHeight * 0.45f).toInt() && rect.height() > (screenHeight * 0.40f).toInt()) {
-                return true
+            if (rect.width() > 100 && rect.height() > 80) {
+                result.hasWorkspaceOrHotseat = true
             }
         }
 
-        // 3. Deteksi list aplikasi vertikal (RecyclerView / GridView) yang memenuhi layar (App Drawer terbuka)
-        if ((cls.contains("RecyclerView", ignoreCase = true) || cls.contains("GridView", ignoreCase = true)) &&
-            node.isScrollable &&
-            rect.top < (screenHeight * 0.38f).toInt() &&
-            rect.height() > (screenHeight * 0.52f).toInt() &&
-            !id.contains("workspace") &&
-            !id.contains("hotseat") &&
-            !id.contains("cell_layout")
+        // 3. Cek apakah container App Drawer / Global Search sedang tampil di layar
+        if (id.contains("all_apps") ||
+            id.contains("apps_view") ||
+            id.contains("apps_list") ||
+            id.contains("global_search") ||
+            id.contains("branch_search")
         ) {
-            return true
+            if (rect.top < (screenHeight * 0.40f).toInt() && rect.height() > (screenHeight * 0.45f).toInt()) {
+                result.hasAllAppsOrSearch = true
+            }
         }
 
         val count = node.childCount
         for (i in 0 until count) {
             val child = node.getChild(i) ?: continue
-            if (checkNodeForDrawerOrSearch(child, screenHeight, depth + 1)) {
-                return true
-            }
+            scanLauncherNodes(child, screenHeight, depth + 1, result)
+            if (result.hasFocusedSearchInput) return
         }
-        return false
     }
 
     private fun isLauncherPackage(pkg: String): Boolean {
@@ -532,13 +543,15 @@ class NotchAccessibilityService : AccessibilityService() {
         val lower = pkg.lowercase()
         return lower == "android" ||
             lower == "com.android.systemui" ||
+            lower.contains("smartpanel") ||
             lower.contains("inputmethod") ||
             lower.contains("keyboard") ||
             lower.contains("kikaoem") ||
             lower.contains("swiftkey") ||
             lower.contains("gboard") ||
             lower.contains("permissioncontroller") ||
-            lower.contains("volume")
+            lower.contains("volume") ||
+            lower.contains("wallpaper")
     }
 
     private fun isDefaultLauncher(pkg: String): Boolean {

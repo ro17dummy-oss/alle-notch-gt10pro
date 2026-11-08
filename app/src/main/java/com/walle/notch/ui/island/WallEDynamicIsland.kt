@@ -145,39 +145,6 @@ fun WallEDynamicIslandOverlay(
     val isHiddenInCamera = cal.autoHideLandscape && state.isLandscapeFullscreen && !state.isExpanded
     val isAppPeek = state.isAppPeek
 
-    val notifPkg = state.notification?.packageName.orEmpty().lowercase()
-    val appNeonColor = remember(notifPkg) {
-        when {
-            notifPkg.contains("whatsapp") -> Color(0xFF25D366)
-            notifPkg.contains("telegram") -> Color(0xFF0088CC)
-            notifPkg.contains("instagram") -> Color(0xFFE1306C)
-            notifPkg.contains("gmail") -> Color(0xFFEA4335)
-            notifPkg.contains("youtube") -> Color(0xFFFF0000)
-            notifPkg.contains("twitter") || notifPkg.contains("x.android") -> Color(0xFFF8FAFC)
-            else -> Color(0xFF25D366)
-        }
-    }
-
-    val neonTransition = rememberInfiniteTransition(label = "livingNeon")
-    val neonPulse by neonTransition.animateFloat(
-        initialValue = 0.45f,
-        targetValue = 0.95f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1800, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "neonPulse"
-    )
-    val beamOffset by neonTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(2800, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "beamOffset"
-    )
-
     val cornerWidth = if (isAppPeek) 4.dp else cal.cornerWidthDp.dp
     val targetBottomRadius = when {
         isAppPeek -> 3.dp
@@ -333,46 +300,6 @@ fun WallEDynamicIslandOverlay(
             ),
         contentAlignment = Alignment.TopCenter
     ) {
-        // Garis tepi neon 'hidup' saat notifikasi aktif (Compact maupun Expanded)
-        if (state.mode == IslandMode.NOTIFICATION && !isAppPeek) {
-            Canvas(
-                modifier = Modifier.fillMaxSize()
-            ) {
-                val rimPath = LiquidNotchShape.buildLiquidNotchPath(
-                    size = size,
-                    density = this,
-                    cornerWidth = cornerWidth,
-                    bottomCornerRadius = animatedBottomRadius
-                )
-                // 1. Halo aura luar berdenyut napas halus
-                drawPath(
-                    path = rimPath,
-                    color = appNeonColor.copy(alpha = 0.35f * neonPulse),
-                    style = Stroke(width = 3.8.dp.toPx(), cap = StrokeCap.Round)
-                )
-                // 2. Garis inti neon tajam
-                drawPath(
-                    path = rimPath,
-                    color = appNeonColor.copy(alpha = 0.85f * neonPulse),
-                    style = Stroke(width = 1.8.dp.toPx(), cap = StrokeCap.Round)
-                )
-                // 3. Aliran laser cahaya berjalan mengitari keliling notch
-                val sweepCenter = Offset(size.width / 2f, size.height * 0.35f)
-                drawPath(
-                    path = rimPath,
-                    brush = Brush.sweepGradient(
-                        0.0f to Color.Transparent,
-                        (beamOffset - 0.2f).coerceIn(0f, 1f) to Color.Transparent,
-                        beamOffset to Color.White.copy(alpha = 0.9f),
-                        (beamOffset + 0.2f).coerceIn(0f, 1f) to appNeonColor.copy(alpha = 0.8f),
-                        1.0f to Color.Transparent,
-                        center = sweepCenter
-                    ),
-                    style = Stroke(width = 2.0.dp.toPx(), cap = StrokeCap.Round)
-                )
-            }
-        }
-
         // Garis kontur kurva bawah halus (Bottom Squircle Rim Highlight) saat di-expand selain notif
         if (state.isExpanded && state.mode != IslandMode.NOTIFICATION) {
             Canvas(
@@ -1674,14 +1601,14 @@ private fun SolarChargeModuleContent(state: IslandUiState) {
 }
 
 /**
- * Komponen Ikon Resmi Aplikasi (Official Vector SVGs)
- * Menampilkan ikon asli WhatsApp, Telegram, Instagram, Gmail, YouTube, X, dll.
+ * Komponen Logo Ikon Sosial Media / Aplikasi Murni SVG Vector (Sangat Ringan, Tanpa Bitmap/Emoji)
+ * Mendukung WhatsApp, Telegram, Instagram, TikTok, Facebook, Messenger, X, Gmail, YouTube, dll.
  */
 @Composable
 private fun AuthenticAppIcon(
     packageName: String,
     modifier: Modifier = Modifier,
-    sizeDp: Dp = 18.dp
+    sizeDp: Dp = 20.dp
 ) {
     val pkg = packageName.lowercase()
     Box(
@@ -1690,242 +1617,177 @@ private fun AuthenticAppIcon(
             .clip(RoundedCornerShape(sizeDp * 0.28f)),
         contentAlignment = Alignment.Center
     ) {
-        when {
-            pkg.contains("whatsapp") -> {
-                // WhatsApp Official Vector Glyph
-                Canvas(modifier = Modifier.fillMaxSize()) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val w = size.width
+            val h = size.height
+            when {
+                pkg.contains("whatsapp") -> {
                     drawRect(Color(0xFF25D366))
-                    val cx = size.width / 2f
-                    val cy = size.height / 2f
-                    val r = size.minDimension * 0.38f
-                    // Speech bubble base
-                    drawCircle(Color.White, radius = r, center = Offset(cx, cy))
-                    // Bubble pointer tail
+                    val cx = w * 0.50f
+                    val cy = h * 0.48f
+                    val r = size.minDimension * 0.34f
+                    // Speech bubble outline SVG
+                    drawCircle(
+                        color = Color.White,
+                        radius = r,
+                        center = Offset(cx, cy),
+                        style = Stroke(width = 1.6.dp.toPx())
+                    )
                     val tailPath = Path().apply {
-                        moveTo(cx - r * 0.7f, cy + r * 0.45f)
-                        lineTo(cx - r * 1.05f, cy + r * 0.95f)
-                        lineTo(cx - r * 0.35f, cy + r * 0.75f)
+                        moveTo(cx - r * 0.55f, cy + r * 0.55f)
+                        lineTo(cx - r * 0.98f, cy + r * 0.98f)
+                        lineTo(cx - r * 0.22f, cy + r * 0.80f)
                         close()
                     }
                     drawPath(tailPath, Color.White)
-                    // Inner phone symbol
-                    drawCircle(Color(0xFF25D366), radius = r * 0.52f, center = Offset(cx, cy))
-                    drawCircle(Color.White, radius = r * 0.22f, center = Offset(cx, cy))
+                    // Handset SVG path inside bubble
+                    val phonePath = Path().apply {
+                        moveTo(cx - r * 0.32f, cy - r * 0.30f)
+                        quadraticBezierTo(cx - r * 0.38f, cy + r * 0.15f, cx + r * 0.28f, cy + r * 0.32f)
+                    }
+                    drawPath(
+                        path = phonePath,
+                        color = Color.White,
+                        style = Stroke(width = 1.7.dp.toPx(), cap = StrokeCap.Round)
+                    )
                 }
-            }
-            pkg.contains("telegram") -> {
-                // Telegram Sky Cyan with White Paper Airplane
-                Canvas(modifier = Modifier.fillMaxSize()) {
-                    drawCircle(Color(0xFF0088CC))
+                pkg.contains("telegram") -> {
+                    drawRect(Color(0xFF0088CC))
                     val p = Path().apply {
-                        moveTo(size.width * 0.22f, size.height * 0.50f)
-                        lineTo(size.width * 0.78f, size.height * 0.28f)
-                        lineTo(size.width * 0.62f, size.height * 0.74f)
-                        lineTo(size.width * 0.48f, size.height * 0.58f)
+                        moveTo(w * 0.20f, h * 0.50f)
+                        lineTo(w * 0.78f, h * 0.26f)
+                        lineTo(w * 0.64f, h * 0.74f)
+                        lineTo(w * 0.46f, h * 0.58f)
                         close()
                     }
                     drawPath(p, Color.White)
                 }
-            }
-            pkg.contains("instagram") -> {
-                // Instagram Sunset Gradient with Camera Glyph
-                Canvas(modifier = Modifier.fillMaxSize()) {
+                pkg.contains("instagram") -> {
                     drawRect(
                         brush = Brush.linearGradient(
                             listOf(Color(0xFFFFD521), Color(0xFFF50000), Color(0xFFB900B4), Color(0xFF7000FF))
                         )
                     )
-                    val pad = size.width * 0.22f
+                    val pad = w * 0.22f
                     drawRoundRect(
                         color = Color.White,
                         topLeft = Offset(pad, pad),
-                        size = Size(size.width - 2 * pad, size.height - 2 * pad),
-                        cornerRadius = CornerRadius(size.width * 0.14f),
-                        style = Stroke(width = 1.3.dp.toPx())
+                        size = Size(w - 2 * pad, h - 2 * pad),
+                        cornerRadius = CornerRadius(w * 0.15f),
+                        style = Stroke(width = 1.4.dp.toPx())
                     )
                     drawCircle(
                         color = Color.White,
-                        radius = size.width * 0.13f,
-                        center = Offset(size.width / 2f, size.height / 2f),
-                        style = Stroke(width = 1.1.dp.toPx())
+                        radius = w * 0.13f,
+                        center = Offset(w / 2f, h / 2f),
+                        style = Stroke(width = 1.2.dp.toPx())
                     )
                     drawCircle(
                         color = Color.White,
-                        radius = size.width * 0.035f,
-                        center = Offset(size.width * 0.68f, size.height * 0.32f)
+                        radius = w * 0.035f,
+                        center = Offset(w * 0.67f, h * 0.33f)
                     )
                 }
-            }
-            pkg.contains("gmail") -> {
-                // Gmail Clean Envelope
-                Canvas(modifier = Modifier.fillMaxSize()) {
+                pkg.contains("tiktok") || pkg.contains("musically") || pkg.contains("trill") -> {
+                    drawRect(Color(0xFF0F0F0F))
+                    val notePath = Path().apply {
+                        moveTo(w * 0.56f, h * 0.22f)
+                        lineTo(w * 0.56f, h * 0.64f)
+                        quadraticBezierTo(w * 0.56f, h * 0.78f, w * 0.40f, h * 0.78f)
+                        quadraticBezierTo(w * 0.26f, h * 0.78f, w * 0.26f, h * 0.64f)
+                        quadraticBezierTo(w * 0.26f, h * 0.50f, w * 0.42f, h * 0.50f)
+                        moveTo(w * 0.56f, h * 0.26f)
+                        quadraticBezierTo(w * 0.66f, h * 0.38f, w * 0.76f, h * 0.38f)
+                    }
+                    drawPath(notePath, Color.White, style = Stroke(width = 1.8.dp.toPx(), cap = StrokeCap.Round))
+                }
+                pkg.contains("facebook") || pkg.contains("katana") -> {
+                    drawRect(Color(0xFF1877F2))
+                    val fPath = Path().apply {
+                        moveTo(w * 0.64f, h * 0.24f)
+                        lineTo(w * 0.54f, h * 0.24f)
+                        quadraticBezierTo(w * 0.46f, h * 0.24f, w * 0.46f, h * 0.34f)
+                        lineTo(w * 0.46f, h * 0.80f)
+                        moveTo(w * 0.36f, h * 0.48f)
+                        lineTo(w * 0.62f, h * 0.48f)
+                    }
+                    drawPath(fPath, Color.White, style = Stroke(width = 2.0.dp.toPx(), cap = StrokeCap.Round))
+                }
+                pkg.contains("orca") || pkg.contains("messenger") -> {
+                    drawRect(Color(0xFF0084FF))
+                    drawCircle(Color.White, radius = w * 0.32f, center = Offset(w * 0.50f, h * 0.48f))
+                    val bolt = Path().apply {
+                        moveTo(w * 0.34f, h * 0.54f)
+                        lineTo(w * 0.47f, h * 0.40f)
+                        lineTo(w * 0.54f, h * 0.49f)
+                        lineTo(w * 0.66f, h * 0.42f)
+                    }
+                    drawPath(bolt, Color(0xFF0084FF), style = Stroke(width = 1.6.dp.toPx(), cap = StrokeCap.Round))
+                }
+                pkg.contains("gmail") -> {
                     drawRect(Color.White)
                     val p = Path().apply {
-                        moveTo(size.width * 0.18f, size.height * 0.28f)
-                        lineTo(size.width * 0.50f, size.height * 0.52f)
-                        lineTo(size.width * 0.82f, size.height * 0.28f)
+                        moveTo(w * 0.18f, h * 0.28f)
+                        lineTo(w * 0.50f, h * 0.52f)
+                        lineTo(w * 0.82f, h * 0.28f)
                     }
                     drawPath(p, Color(0xFFEA4335), style = Stroke(width = 1.6.dp.toPx(), cap = StrokeCap.Round))
                     drawRoundRect(
                         color = Color(0xFFEA4335),
-                        topLeft = Offset(size.width * 0.16f, size.height * 0.26f),
-                        size = Size(size.width * 0.68f, size.height * 0.48f),
+                        topLeft = Offset(w * 0.16f, h * 0.26f),
+                        size = Size(w * 0.68f, h * 0.48f),
                         cornerRadius = CornerRadius(2.dp.toPx()),
                         style = Stroke(width = 1.3.dp.toPx())
                     )
                 }
-            }
-            pkg.contains("youtube") -> {
-                // YouTube Hyper Red with Play Triangle
-                Canvas(modifier = Modifier.fillMaxSize()) {
+                pkg.contains("youtube") -> {
                     drawRoundRect(
                         color = Color(0xFFFF0000),
-                        cornerRadius = CornerRadius(size.width * 0.24f)
+                        cornerRadius = CornerRadius(w * 0.24f)
                     )
                     val p = Path().apply {
-                        moveTo(size.width * 0.38f, size.height * 0.32f)
-                        lineTo(size.width * 0.68f, size.height * 0.50f)
-                        lineTo(size.width * 0.38f, size.height * 0.68f)
+                        moveTo(w * 0.38f, h * 0.32f)
+                        lineTo(w * 0.68f, h * 0.50f)
+                        lineTo(w * 0.38f, h * 0.68f)
                         close()
                     }
                     drawPath(p, Color.White)
                 }
-            }
-            pkg.contains("twitter") || pkg.contains("x.android") -> {
-                // X Pure Black with Sleek White Cross
-                Canvas(modifier = Modifier.fillMaxSize()) {
-                    drawRect(Color.Black)
+                pkg.contains("twitter") || pkg.contains("x.android") -> {
+                    drawRect(Color(0xFF14171A))
                     drawLine(
                         color = Color.White,
-                        start = Offset(size.width * 0.25f, size.height * 0.25f),
-                        end = Offset(size.width * 0.75f, size.height * 0.75f),
+                        start = Offset(w * 0.25f, h * 0.25f),
+                        end = Offset(w * 0.75f, h * 0.75f),
                         strokeWidth = 1.6.dp.toPx(),
                         cap = StrokeCap.Round
                     )
                     drawLine(
                         color = Color.White,
-                        start = Offset(size.width * 0.75f, size.height * 0.25f),
-                        end = Offset(size.width * 0.25f, size.height * 0.75f),
+                        start = Offset(w * 0.75f, h * 0.25f),
+                        end = Offset(w * 0.25f, h * 0.75f),
                         strokeWidth = 1.6.dp.toPx(),
                         cap = StrokeCap.Round
                     )
                 }
-            }
-            else -> {
-                // Default Messenger Badge
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color(0xFF25D366)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "💬",
-                        fontSize = (sizeDp.value * 0.55f).sp
+                else -> {
+                    // Default Clean SVG Chat Bubble Icon (Tanpa Emoji)
+                    drawRect(Color(0xFF25D366))
+                    drawRoundRect(
+                        color = Color.White,
+                        topLeft = Offset(w * 0.22f, h * 0.24f),
+                        size = Size(w * 0.56f, h * 0.44f),
+                        cornerRadius = CornerRadius(w * 0.14f)
                     )
+                    val tail = Path().apply {
+                        moveTo(w * 0.30f, h * 0.65f)
+                        lineTo(w * 0.24f, h * 0.80f)
+                        lineTo(w * 0.44f, h * 0.68f)
+                        close()
+                    }
+                    drawPath(tail, Color.White)
                 }
             }
-        }
-    }
-}
-
-/**
- * Komponen Ikon Lonceng Berdering Monokrom (SVG)
- * Dilengkapi animasi getaran (ringing chime) dan gelombang radar pudar di sekitarnya.
- */
-@Composable
-private fun RingingBellIcon(
-    neonColor: Color,
-    modifier: Modifier = Modifier
-) {
-    val infiniteTransition = rememberInfiniteTransition(label = "bellRing")
-    val bellRotation by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 0f,
-        animationSpec = infiniteRepeatable(
-            animation = keyframes {
-                durationMillis = 1800
-                0f at 0
-                14f at 180
-                -12f at 360
-                10f at 540
-                -8f at 720
-                4f at 900
-                0f at 1080
-                0f at 1800
-            },
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "bellRotation"
-    )
-    val pingScale by infiniteTransition.animateFloat(
-        initialValue = 0.5f,
-        targetValue = 1.4f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1800, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "pingScale"
-    )
-    val pingAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.85f,
-        targetValue = 0.0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1800, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "pingAlpha"
-    )
-
-    Box(
-        modifier = modifier.size(24.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        // Lingkaran Radar Ping
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            drawCircle(
-                color = neonColor.copy(alpha = pingAlpha),
-                radius = (size.minDimension / 2f) * pingScale,
-                style = Stroke(width = 1.4.dp.toPx())
-            )
-        }
-
-        // Ikon Lonceng SVG Putih Monokrom
-        Canvas(
-            modifier = Modifier
-                .size(17.dp)
-                .rotate(bellRotation)
-        ) {
-            val w = size.width
-            val h = size.height
-
-            // Badan Lonceng
-            val bellPath = Path().apply {
-                moveTo(w * 0.44f, h * 0.12f)
-                quadraticBezierTo(w * 0.50f, h * 0.02f, w * 0.56f, h * 0.12f)
-                quadraticBezierTo(w * 0.78f, h * 0.22f, w * 0.78f, h * 0.60f)
-                quadraticBezierTo(w * 0.82f, h * 0.78f, w * 0.92f, h * 0.82f)
-                lineTo(w * 0.08f, h * 0.82f)
-                quadraticBezierTo(w * 0.18f, h * 0.78f, w * 0.18f, h * 0.60f)
-                quadraticBezierTo(w * 0.22f, h * 0.22f, w * 0.44f, h * 0.12f)
-                close()
-            }
-            drawPath(
-                path = bellPath,
-                color = Color.White,
-                style = Stroke(width = 1.8.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
-            )
-
-            // Bandul Lonceng Bawah
-            val clapperPath = Path().apply {
-                moveTo(w * 0.42f, h * 0.86f)
-                quadraticBezierTo(w * 0.50f, h * 0.98f, w * 0.58f, h * 0.86f)
-            }
-            drawPath(
-                path = clapperPath,
-                color = Color.White,
-                style = Stroke(width = 1.8.dp.toPx(), cap = StrokeCap.Round)
-            )
         }
     }
 }
@@ -1939,11 +1801,12 @@ private fun NotificationModuleContent(
     val context = LocalContext.current
     val notif = state.notification ?: NotificationPayload()
     val notifPkg = notif.packageName.lowercase()
-    val appNeonColor = remember(notifPkg) {
+    val appAccentColor = remember(notifPkg) {
         when {
             notifPkg.contains("whatsapp") -> Color(0xFF25D366)
             notifPkg.contains("telegram") -> Color(0xFF0088CC)
             notifPkg.contains("instagram") -> Color(0xFFE1306C)
+            notifPkg.contains("facebook") || notifPkg.contains("katana") -> Color(0xFF1877F2)
             notifPkg.contains("gmail") -> Color(0xFFEA4335)
             notifPkg.contains("youtube") -> Color(0xFFFF0000)
             notifPkg.contains("twitter") || notifPkg.contains("x.android") -> Color(0xFFF8FAFC)
@@ -1954,45 +1817,29 @@ private fun NotificationModuleContent(
     val focusRequester = remember { FocusRequester() }
 
     if (!state.isExpanded) {
-        // Mode Notif Biasa (Compact 202x36dp): Sisi Kiri Ikon Asli + Sender, Sisi Kanan Lonceng SVG
+        // Mode Notif Biasa (Compact 202x36dp): Cukup tampilkan logo ikon SVG aplikasi/sosmed saja (tanpa teks & tanpa neon)
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 6.dp, vertical = 2.dp),
+                .padding(horizontal = 8.dp, vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            // Sisi Kiri Kamera: Official App Icon + Nama Pengirim
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                modifier = Modifier.weight(1f)
+            Box(
+                modifier = Modifier.weight(1f),
+                contentAlignment = Alignment.Center
             ) {
                 AuthenticAppIcon(
                     packageName = notif.packageName,
-                    sizeDp = 18.dp
-                )
-                Text(
-                    text = notif.sender,
-                    color = Color.White,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    sizeDp = 20.dp
                 )
             }
 
             // Punch hole camera clearance space (23dp + margin)
             Spacer(modifier = Modifier.width((state.calibration.cameraHoleSizeDp + 8).dp))
 
-            // Sisi Kanan Kamera: Ikon Lonceng Berdering SVG Monokrom + Gelombang Radar
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.End,
-                modifier = Modifier.weight(1f)
-            ) {
-                RingingBellIcon(neonColor = appNeonColor)
-            }
+            // Sisi kanan dikosongkan agar ringan dan fokus pada logo ikon sosmed
+            Spacer(modifier = Modifier.weight(1f))
         }
     } else {
         // Mode Expand Balas Chat (320x110dp)
@@ -2091,7 +1938,7 @@ private fun NotificationModuleContent(
                         .height(28.dp)
                         .clip(CircleShape)
                         .background(Color.White.copy(alpha = 0.10f))
-                        .border(1.dp, appNeonColor.copy(alpha = 0.35f), CircleShape)
+                        .border(1.dp, Color.White.copy(alpha = 0.18f), CircleShape)
                         .clickable {
                             onFocusInput(true)
                             focusRequester.requestFocus()
@@ -2119,7 +1966,7 @@ private fun NotificationModuleContent(
                             fontSize = 11.sp,
                             platformStyle = PlatformTextStyle(includeFontPadding = false)
                         ),
-                        cursorBrush = SolidColor(appNeonColor),
+                        cursorBrush = SolidColor(appAccentColor),
                         modifier = Modifier
                             .fillMaxWidth()
                             .focusRequester(focusRequester)
@@ -2128,7 +1975,7 @@ private fun NotificationModuleContent(
 
                 PillActionButton(
                     text = "Kirim",
-                    bg = appNeonColor,
+                    bg = appAccentColor,
                     fg = PitchBlack
                 ) {
                     if (replyText.isNotBlank()) {
