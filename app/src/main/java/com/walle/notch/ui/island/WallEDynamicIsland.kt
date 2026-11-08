@@ -36,6 +36,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
@@ -130,31 +131,58 @@ fun WallEDynamicIslandOverlay(
     // 1. Hilang sepenuhnya jika layar horizontal
     // 2. Hilang ketika membuka Aplikasi saat mode Standby IDLE (muncul jika ada event Dynamic Island: musik/notif/cas)
     // 3. Hilang ketika gulir menu atas/bawah (status bar / notification shade)
-    // Hilang: geser ke atas + memudar (260ms). Muncul: turun dari atas dengan sedikit membal.
+    // Hilang: geser ke atas + memudar (260ms). Muncul: turun dari atas tanpa membal
+    // (pantulan membuat notch sempat turun & lepas dari bezel atas).
     // Ukuran tidak diubah, jadi tidak ada pergeseran ke samping.
     val hideProgress by animateFloatAsState(
         targetValue = if (state.isNotchHidden) 1f else 0f,
         animationSpec = if (state.isNotchHidden) {
             tween(durationMillis = 260, easing = FastOutSlowInEasing)
         } else {
-            spring(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow)
+            spring(dampingRatio = 1f, stiffness = 600f)
         },
         label = "notchHide"
     )
 
     val isHiddenInCamera = cal.autoHideLandscape && state.isLandscapeFullscreen && !state.isExpanded
-    val isAppPeek = state.isAppPeek
 
-    val cornerWidth = if (isAppPeek) 4.dp else cal.cornerWidthDp.dp
+    // Debounce: status peek (app/drawer) sering berkedip beberapa kali saat kembali ke Home.
+    // Masuk ke peek langsung, tapi keluar dari peek ditahan 150ms agar animasi tidak bolak-balik.
+    val rawPeek = state.isAppPeek
+    var heldPeek by remember { mutableStateOf(rawPeek) }
+    LaunchedEffect(rawPeek) {
+        if (rawPeek) {
+            heldPeek = true
+        } else {
+            delay(150L)
+            heldPeek = false
+        }
+    }
+    val canHoldPeek = state.mode == IslandMode.IDLE && !state.isExpanded && !state.isNotchHidden
+    val isAppPeek = rawPeek || (heldPeek && canHoldPeek)
+
+    // Satu "bahasa gerak" untuk semua properti morph (lebar, tinggi, sudut, radius):
+    // masuk peek lebih cepat (~65% durasi keluar), keluar peek tanpa membal, expand tetap sedikit membal.
+    val morphSpec = when {
+        isAppPeek -> spring<Dp>(dampingRatio = 1f, stiffness = 1300f)
+        state.isExpanded -> spring<Dp>(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow)
+        else -> spring<Dp>(dampingRatio = 1f, stiffness = 600f)
+    }
+
+    val cornerWidth by animateDpAsState(
+        targetValue = if (isAppPeek) 4.dp else cal.cornerWidthDp.dp,
+        animationSpec = morphSpec,
+        label = "notchCorner"
+    )
     val targetBottomRadius = when {
         isAppPeek -> 3.dp
         state.isExpanded -> 28.dp
         else -> (cal.cornerWidthDp * 0.64f).dp
     }
 
-    val targetTotalWidth: Dp = when {
+    // Ukuran "normal" (tanpa peek): dipakai untuk layout isi agar isi tidak terjepit saat notch tumbuh
+    val normalWidth: Dp = when {
         isHiddenInCamera -> cal.cameraHoleSizeDp.dp
-        isAppPeek -> 64.dp
         state.isExpanded -> when (state.mode) {
             IslandMode.IDLE -> 318.dp          // Nusa Multi-Card Interactive Dashboard
             IslandMode.MUSIC -> 318.dp         // Nusa-style sleek music player
@@ -171,9 +199,8 @@ fun WallEDynamicIslandOverlay(
         }
     }
 
-    val targetHeight: Dp = when {
+    val normalHeight: Dp = when {
         isHiddenInCamera -> cal.cameraHoleSizeDp.dp
-        isAppPeek -> 4.dp
         state.isExpanded -> when (state.mode) {
             IslandMode.IDLE -> 110.dp          // Multi-Card Dashboard
             IslandMode.MUSIC -> 148.dp
@@ -184,44 +211,39 @@ fun WallEDynamicIslandOverlay(
         else -> cal.idleHeightDp.dp
     }
 
+    val targetTotalWidth: Dp = if (isAppPeek) 64.dp else normalWidth
+    val targetHeight: Dp = if (isAppPeek) 4.dp else normalHeight
+
     val animatedWidth by animateDpAsState(
         targetValue = targetTotalWidth,
-        animationSpec = spring(
-            dampingRatio = 0.72f,
-            stiffness = Spring.StiffnessMediumLow
-        ),
+        animationSpec = morphSpec,
         label = "notchWidth"
     )
 
     val animatedHeight by animateDpAsState(
         targetValue = targetHeight,
-        animationSpec = spring(
-            dampingRatio = 0.74f,
-            stiffness = Spring.StiffnessMediumLow
-        ),
+        animationSpec = morphSpec,
         label = "notchHeight"
     )
 
     val animatedBottomRadius by animateDpAsState(
         targetValue = targetBottomRadius,
-        animationSpec = spring(
-            dampingRatio = 0.74f,
-            stiffness = Spring.StiffnessMediumLow
-        ),
+        animationSpec = morphSpec,
         label = "notchBottomRadius"
     )
 
-    val animatedHorizontalPad by animateDpAsState(
-        targetValue = when {
-            isAppPeek -> 0.dp
-            state.isExpanded -> 24.dp
-            else -> cornerWidth
+    // Padding isi tetap (tidak dianimasikan) karena isi di-layout pada ukuran final
+    val contentHorizontalPad = if (state.isExpanded) 24.dp else cal.cornerWidthDp.dp
+
+    // Isi (mata EVE dll) fade-in setelah notch hampir selesai tumbuh; fade-out cepat saat mengecil
+    val contentAlpha by animateFloatAsState(
+        targetValue = if (isAppPeek) 0f else 1f,
+        animationSpec = if (isAppPeek) {
+            tween(durationMillis = 80, easing = LinearEasing)
+        } else {
+            tween(durationMillis = 200, delayMillis = 90, easing = FastOutSlowInEasing)
         },
-        animationSpec = spring(
-            dampingRatio = 0.74f,
-            stiffness = Spring.StiffnessMediumLow
-        ),
-        label = "notchHorizontalPad"
+        label = "notchContentAlpha"
     )
 
     // 100% Mirror-Symmetric Liquid Notch Shape with 1:1 Bottom Squircle Corners
@@ -323,11 +345,15 @@ fun WallEDynamicIslandOverlay(
             }
         }
 
-        if (!isHiddenInCamera && !isAppPeek) {
+        if (!isHiddenInCamera && (!isAppPeek || contentAlpha > 0.01f)) {
+            // Isi di-layout pada ukuran FINAL lalu di-clip oleh bentuk notch yang tumbuh (rata atas-tengah),
+            // jadi mata EVE tidak terjepit / berubah susunan selama transisi.
             Box(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = animatedHorizontalPad),
+                    .wrapContentSize(Alignment.TopCenter, unbounded = true)
+                    .size(normalWidth, normalHeight)
+                    .graphicsLayer { alpha = contentAlpha }
+                    .padding(horizontal = contentHorizontalPad),
                 contentAlignment = Alignment.TopCenter
             ) {
                 when (state.mode) {
