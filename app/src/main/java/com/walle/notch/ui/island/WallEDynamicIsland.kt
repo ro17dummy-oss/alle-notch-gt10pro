@@ -2258,10 +2258,11 @@ private fun PillActionButton(
     text: String,
     bg: Color,
     fg: Color,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
     Box(
-        modifier = Modifier
+        modifier = modifier
             .height(26.dp)
             .clip(CircleShape)
             .background(bg)
