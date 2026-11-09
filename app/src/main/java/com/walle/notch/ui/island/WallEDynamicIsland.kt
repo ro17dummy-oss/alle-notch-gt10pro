@@ -851,24 +851,25 @@ private fun IdleModuleContent(state: IslandUiState) {
                         }
                     }
                     else -> {
-                        // KARTU 3: Stopwatch Digital Minimalis (Hanya Tombol Ikon Bulat ↺ & ▶/⏸)
-                        Row(
+                        // KARTU 3: Stopwatch Digital Minimalis (Waktu di Atas, Tombol Reset & Play di Bawah)
+                        val totalMs = state.stopwatch.elapsedMillis
+                        val minutes = (totalMs / 60000)
+                        val seconds = (totalMs % 60000) / 1000
+                        val millis = (totalMs % 1000) / 100
+                        val timeString = "%02d:%02d.%d".format(minutes, seconds, millis)
+
+                        Column(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .padding(horizontal = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
+                                .padding(vertical = 2.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
                         ) {
-                            // Digit Display Monospace di Kiri
-                            Column(
-                                verticalArrangement = Arrangement.Center
+                            // Waktu Stopwatch di Atas
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
-                                val totalMs = state.stopwatch.elapsedMillis
-                                val minutes = (totalMs / 60000)
-                                val seconds = (totalMs % 60000) / 1000
-                                val millis = (totalMs % 1000) / 100
-                                val timeString = "%02d:%02d.%d".format(minutes, seconds, millis)
-
                                 Text(
                                     text = timeString,
                                     color = if (state.stopwatch.isRunning) EveCyanGlow else Color.White,
@@ -878,7 +879,7 @@ private fun IdleModuleContent(state: IslandUiState) {
                                     letterSpacing = 1.sp
                                 )
                                 Text(
-                                    text = if (state.stopwatch.isRunning) "BERJALAN" else if (totalMs > 0) "JEDA" else "SIAP",
+                                    text = if (state.stopwatch.isRunning) "● RUN" else if (totalMs > 0) "PAUSE" else "READY",
                                     color = if (state.stopwatch.isRunning) DirectivePlantGreen else Color(0xFF94A3B8),
                                     fontSize = 8.5.sp,
                                     fontWeight = FontWeight.Bold,
@@ -886,10 +887,12 @@ private fun IdleModuleContent(state: IslandUiState) {
                                 )
                             }
 
-                            // Tombol Ikon Bulat Minimalis di Kanan
+                            Spacer(modifier = Modifier.height(5.dp))
+
+                            // Tombol Reset & Play/Pause di Bawah
                             Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
                                 val hasTime = state.stopwatch.elapsedMillis > 0L
                                 // Tombol Reset (Ikon Vektor Canvas Bulat)
@@ -897,8 +900,8 @@ private fun IdleModuleContent(state: IslandUiState) {
                                     iconType = MediaIconType.RESET,
                                     bg = if (hasTime) Color.White.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.05f),
                                     fg = if (hasTime) Color.White else Color.White.copy(alpha = 0.25f),
-                                    modifier = Modifier.size(34.dp),
-                                    iconSize = 13.dp
+                                    modifier = Modifier.size(32.dp),
+                                    iconSize = 12.dp
                                 ) {
                                     if (hasTime) {
                                         IslandRepository.resetStopwatch()
@@ -910,8 +913,8 @@ private fun IdleModuleContent(state: IslandUiState) {
                                     iconType = if (state.stopwatch.isRunning) MediaIconType.PAUSE else MediaIconType.PLAY,
                                     bg = if (state.stopwatch.isRunning) WallESolarAmber else EveCyanGlow,
                                     fg = PitchBlack,
-                                    modifier = Modifier.size(34.dp),
-                                    iconSize = 13.dp
+                                    modifier = Modifier.size(32.dp),
+                                    iconSize = 12.dp
                                 ) {
                                     if (state.stopwatch.isRunning) {
                                         IslandRepository.pauseStopwatch()
