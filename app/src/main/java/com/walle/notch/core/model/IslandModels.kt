@@ -142,7 +142,9 @@ data class IslandUiState(
     val todoList: List<TodoItem> = listOf(
         TodoItem(1, "Beli charger 45W GT 10 Pro", false),
         TodoItem(2, "Review update Wall-E Notch", true),
-        TodoItem(3, "Backup data game", false)
+        TodoItem(3, "Backup data game", false),
+        TodoItem(4, "Aktifkan bypass charging saat gaming", false),
+        TodoItem(5, "Cek jadwal sholat hari ini", false)
     ),
     val stopwatch: StopwatchState = StopwatchState(),
     val lastExpandedPage: Int = 0,

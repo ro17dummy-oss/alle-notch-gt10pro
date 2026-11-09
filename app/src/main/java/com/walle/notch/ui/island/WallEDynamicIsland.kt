@@ -28,6 +28,8 @@ import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.Arrangement
@@ -106,7 +108,7 @@ private val CuteBlushPink = Color(0xFFFF7597)
 private val SoftCyanHalo = Color(0xFF00E5FF)
 
 private enum class MediaIconType {
-    PREV, PLAY, PAUSE, NEXT
+    PREV, PLAY, PAUSE, NEXT, RESET
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -230,7 +232,7 @@ private fun NotchBody(
     val normalHeight: Dp = when {
         isHiddenInCamera -> cal.cameraHoleSizeDp.dp
         state.isExpanded -> when (state.mode) {
-            IslandMode.IDLE -> 122.dp          // 4-Card Dashboard (Musik, Sholat, To-Do, Stopwatch)
+            IslandMode.IDLE -> 128.dp          // 4-Card Dashboard (Musik, Sholat, To-Do, Stopwatch)
             IslandMode.MUSIC -> 148.dp
             IslandMode.SOLAR_CHARGE -> 114.dp
             IslandMode.NOTIFICATION -> 110.dp  // Tinggi pas untuk balas cepat tanpa mubazir
@@ -650,46 +652,48 @@ private fun IdleModuleContent(state: IslandUiState) {
                                     )
                                 }
 
-                                // Kontrol Bawah: ⏮   ▶/⏸   ⏭   dan 🔊 di Kanan (Tanpa balon kutipan)
+                                // Kontrol Bawah: Vector Canvas Media Controls (⏮, ▶/⏸, ⏭) & 🔊
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
-                                    Spacer(modifier = Modifier.width(18.dp)) // Penyeimbang kiri
+                                    Spacer(modifier = Modifier.width(16.dp)) // Penyeimbang kiri
 
-                                    // Tombol Media Tengah
+                                    // Tombol Media Vektor Canvas Tengah (Jaminan 100% muncul & tajam di semua device)
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                                     ) {
-                                        Text(
-                                            text = "⏮",
-                                            color = Color.White,
-                                            fontSize = 14.sp,
-                                            modifier = Modifier.clickable { IslandRepository.onMediaPrevious?.invoke() }
-                                        )
-                                        Box(
-                                            modifier = Modifier
-                                                .size(24.dp)
-                                                .clip(CircleShape)
-                                                .background(if (state.music.isPlaying) EveCyanGlow else Color.White.copy(alpha = 0.2f))
-                                                .clickable { IslandRepository.onMediaPlayPause?.invoke() },
-                                            contentAlignment = Alignment.Center
+                                        MediaIconButton(
+                                            iconType = MediaIconType.PREV,
+                                            bg = Color.White.copy(alpha = 0.12f),
+                                            fg = Color.White,
+                                            modifier = Modifier.size(26.dp),
+                                            iconSize = 10.dp
                                         ) {
-                                            Text(
-                                                text = if (state.music.isPlaying) "⏸" else "▶",
-                                                color = if (state.music.isPlaying) PitchBlack else Color.White,
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.Bold
-                                            )
+                                            IslandRepository.onMediaPrevious?.invoke()
                                         }
-                                        Text(
-                                            text = "⏭",
-                                            color = Color.White,
-                                            fontSize = 14.sp,
-                                            modifier = Modifier.clickable { IslandRepository.onMediaNext?.invoke() }
-                                        )
+
+                                        MediaIconButton(
+                                            iconType = if (state.music.isPlaying) MediaIconType.PAUSE else MediaIconType.PLAY,
+                                            bg = if (state.music.isPlaying) EveCyanGlow else Color.White.copy(alpha = 0.22f),
+                                            fg = if (state.music.isPlaying) PitchBlack else Color.White,
+                                            modifier = Modifier.size(28.dp),
+                                            iconSize = 11.dp
+                                        ) {
+                                            IslandRepository.onMediaPlayPause?.invoke()
+                                        }
+
+                                        MediaIconButton(
+                                            iconType = MediaIconType.NEXT,
+                                            bg = Color.White.copy(alpha = 0.12f),
+                                            fg = Color.White,
+                                            modifier = Modifier.size(26.dp),
+                                            iconSize = 10.dp
+                                        ) {
+                                            IslandRepository.onMediaNext?.invoke()
+                                        }
                                     }
 
                                     // Ikon Speaker Kanan
@@ -784,12 +788,15 @@ private fun IdleModuleContent(state: IslandUiState) {
                         }
                     }
                     2 -> {
-                        // KARTU 2: Catatan Kecil (Opsi B: Mini To-Do Checklist yang dapat dicentang)
+                        // KARTU 2: Catatan Kecil (To-Do Checklist yang dapat dicentang & discroll ke bawah)
+                        val todoScrollState = rememberScrollState()
                         Column(
-                            modifier = Modifier.fillMaxSize(),
-                            verticalArrangement = Arrangement.SpaceBetween
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .verticalScroll(todoScrollState),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            state.todoList.take(3).forEach { item ->
+                            state.todoList.forEach { item ->
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -844,11 +851,11 @@ private fun IdleModuleContent(state: IslandUiState) {
                         }
                     }
                     else -> {
-                        // KARTU 3: Stopwatch Digital
+                        // KARTU 3: Stopwatch Digital Minimalis (Hanya Tombol Ikon Bulat ↺ & ▶/⏸)
                         Row(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .padding(horizontal = 4.dp),
+                                .padding(horizontal = 6.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
@@ -864,39 +871,47 @@ private fun IdleModuleContent(state: IslandUiState) {
 
                                 Text(
                                     text = timeString,
-                                    color = EveCyanGlow,
+                                    color = if (state.stopwatch.isRunning) EveCyanGlow else Color.White,
                                     fontSize = 24.sp,
                                     fontWeight = FontWeight.Black,
                                     fontFamily = FontFamily.Monospace,
                                     letterSpacing = 1.sp
                                 )
                                 Text(
-                                    text = if (state.stopwatch.isRunning) "STOPWATCH BERJALAN" else "SIAP",
+                                    text = if (state.stopwatch.isRunning) "BERJALAN" else if (totalMs > 0) "JEDA" else "SIAP",
                                     color = if (state.stopwatch.isRunning) DirectivePlantGreen else Color(0xFF94A3B8),
                                     fontSize = 8.5.sp,
-                                    fontWeight = FontWeight.Bold
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 0.5.sp
                                 )
                             }
 
-                            // Tombol Aksi di Kanan
+                            // Tombol Ikon Bulat Minimalis di Kanan
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                // Tombol Reset
-                                PillActionButton(
-                                    text = "↺ Reset",
-                                    bg = Color.White.copy(alpha = 0.1f),
-                                    fg = Color.White
+                                val hasTime = state.stopwatch.elapsedMillis > 0L
+                                // Tombol Reset (Ikon Vektor Canvas Bulat)
+                                MediaIconButton(
+                                    iconType = MediaIconType.RESET,
+                                    bg = if (hasTime) Color.White.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.05f),
+                                    fg = if (hasTime) Color.White else Color.White.copy(alpha = 0.25f),
+                                    modifier = Modifier.size(34.dp),
+                                    iconSize = 13.dp
                                 ) {
-                                    IslandRepository.resetStopwatch()
+                                    if (hasTime) {
+                                        IslandRepository.resetStopwatch()
+                                    }
                                 }
 
-                                // Tombol Start / Pause
-                                PillActionButton(
-                                    text = if (state.stopwatch.isRunning) "⏸ Jeda" else "▶ Mulai",
+                                // Tombol Start / Pause (Ikon Vektor Canvas Bulat)
+                                MediaIconButton(
+                                    iconType = if (state.stopwatch.isRunning) MediaIconType.PAUSE else MediaIconType.PLAY,
                                     bg = if (state.stopwatch.isRunning) WallESolarAmber else EveCyanGlow,
-                                    fg = PitchBlack
+                                    fg = PitchBlack,
+                                    modifier = Modifier.size(34.dp),
+                                    iconSize = 13.dp
                                 ) {
                                     if (state.stopwatch.isRunning) {
                                         IslandRepository.pauseStopwatch()
@@ -1777,18 +1792,18 @@ private fun MediaIconButton(
     iconType: MediaIconType,
     bg: Color,
     fg: Color,
+    modifier: Modifier = Modifier.width(36.dp).height(26.dp),
+    iconSize: Dp = 11.dp,
     onClick: () -> Unit
 ) {
     Box(
-        modifier = Modifier
-            .width(36.dp)
-            .height(26.dp)
+        modifier = modifier
             .clip(CircleShape)
             .background(bg)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
-        Canvas(modifier = Modifier.size(11.dp)) {
+        Canvas(modifier = Modifier.size(iconSize)) {
             val w = size.width
             val h = size.height
             when (iconType) {
@@ -1848,6 +1863,22 @@ private fun MediaIconButton(
                         strokeWidth = 2.4.dp.toPx(),
                         cap = StrokeCap.Round
                     )
+                }
+                MediaIconType.RESET -> {
+                    drawArc(
+                        color = fg,
+                        startAngle = 45f,
+                        sweepAngle = 270f,
+                        useCenter = false,
+                        style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
+                    )
+                    val arrowPath = Path().apply {
+                        moveTo(w * 0.40f, h * 0.02f)
+                        lineTo(w * 0.72f, h * 0.20f)
+                        lineTo(w * 0.40f, h * 0.38f)
+                        close()
+                    }
+                    drawPath(path = arrowPath, color = fg)
                 }
             }
         }
