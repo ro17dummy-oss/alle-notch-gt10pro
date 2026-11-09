@@ -145,6 +145,7 @@ data class IslandUiState(
         TodoItem(3, "Backup data game", false)
     ),
     val stopwatch: StopwatchState = StopwatchState(),
+    val lastExpandedPage: Int = 0,
     val isOverlayServiceRunning: Boolean = false,
     val isNotificationListenerConnected: Boolean = false,
     val lastFeedbackMessage: String? = null

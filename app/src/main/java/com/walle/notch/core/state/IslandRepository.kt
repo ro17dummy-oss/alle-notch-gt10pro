@@ -33,6 +33,7 @@ object IslandRepository {
     private const val CALIBRATION_VERSION = 2 // v2: Fixed notch 36dp height, 202dp width, 36dp corner width
 
     private val repoScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+    private var appContext: Context? = null
     private var transientBannerJob: Job? = null
     private var eveIdleCycleJob: Job? = null
     private var eveWakeJob: Job? = null
@@ -47,6 +48,7 @@ object IslandRepository {
     var onMediaSeekTo: ((Long) -> Unit)? = null
 
     fun loadCalibration(context: Context) {
+        appContext = context.applicationContext
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val currentVersion = prefs.getInt("calibration_version", 1)
 
@@ -96,8 +98,9 @@ object IslandRepository {
         } catch (_: Exception) {
             EveMood.HAPPY
         }
+        val savedLastPage = prefs.getInt("lastExpandedPage", 0).coerceIn(0, 3)
 
-        _uiState.update { it.copy(calibration = cal, eveMood = mood) }
+        _uiState.update { it.copy(calibration = cal, eveMood = mood, lastExpandedPage = savedLastPage) }
     }
 
     fun updateCalibration(context: Context, transform: (IslandCalibration) -> IslandCalibration) {
@@ -126,6 +129,19 @@ object IslandRepository {
         context?.let { ctx ->
             val prefs = ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             prefs.edit().putString("eveMood", mood.name).apply()
+        }
+    }
+
+    fun setLastExpandedPage(page: Int, context: Context? = null) {
+        val validPage = page.coerceIn(0, 3)
+        if (_uiState.value.lastExpandedPage == validPage) return
+        _uiState.update { it.copy(lastExpandedPage = validPage) }
+        val ctx = context ?: appContext
+        ctx?.let {
+            it.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .edit()
+                .putInt("lastExpandedPage", validPage)
+                .apply()
         }
     }
 

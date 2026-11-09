@@ -477,10 +477,18 @@ private fun IdleModuleContent(state: IslandUiState) {
 
     if (state.isExpanded || dashboardAlpha > 0.01f) {
         // EXPANDED: NUSA MULTI-CARD INTERACTIVE DASHBOARD dengan HorizontalPager
-        val pagerState = rememberPagerState(pageCount = { 4 })
+        val context = LocalContext.current
+        val pagerState = rememberPagerState(
+            initialPage = state.lastExpandedPage.coerceIn(0, 3),
+            pageCount = { 4 }
+        )
         val coroutineScope = rememberCoroutineScope()
         val activeTab = pagerState.currentPage
         val view = LocalView.current
+
+        LaunchedEffect(pagerState.currentPage) {
+            IslandRepository.setLastExpandedPage(pagerState.currentPage, context)
+        }
 
         Column(
             modifier = Modifier
