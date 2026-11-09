@@ -26,6 +26,10 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -317,7 +321,7 @@ private fun NotchBody(
             .combinedClickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
-                enabled = !isAppPeek,
+                enabled = !isAppPeek && !state.isExpanded,
                 onClick = {
                     try {
                         view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
@@ -454,167 +458,38 @@ private fun IdleModuleContent(state: IslandUiState) {
         label = "blushPulse"
     )
 
-    if (!state.isExpanded) {
-        // COLLAPSED STANDBY (202dp x 36dp)
-        // Transisi halus antara aktivitas (TOUCH_BLACKOUT / hitam murni) dan standby (mata EVE menyala)
-        val standbyEyesAlpha by animateFloatAsState(
-            targetValue = if (state.eveIdlePhase == EveIdlePhase.TOUCH_BLACKOUT) 0f else 1f,
-            animationSpec = tween(
-                durationMillis = if (state.eveIdlePhase == EveIdlePhase.TOUCH_BLACKOUT) 120 else 280,
-                easing = FastOutSlowInEasing
-            ),
-            label = "standbyEyesAlpha"
-        )
-        if (standbyEyesAlpha <= 0.01f) {
-            Box(modifier = Modifier.fillMaxSize())
-            return
-        }
+    // Transisi crossfade halus antara Dashboard Expanded dan Mata EVE Standby
+    val dashboardAlpha by animateFloatAsState(
+        targetValue = if (state.isExpanded) 1f else 0f,
+        animationSpec = if (state.isExpanded) {
+            tween(durationMillis = 200, delayMillis = 110, easing = FastOutSlowInEasing)
+        } else {
+            tween(durationMillis = 90, easing = LinearEasing)
+        },
+        label = "dashboardAlpha"
+    )
 
-        // Animasi bernapas (breathing glow) saat tidur nyenyak
-        val breathingAlpha by infinite.animateFloat(
-            initialValue = 0.55f,
-            targetValue = 1.0f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 1500, easing = FastOutSlowInEasing),
-                repeatMode = RepeatMode.Reverse
-            ),
-            label = "sleepBreathingAlpha"
-        )
+    val compactEyesAlpha by animateFloatAsState(
+        targetValue = if (!state.isExpanded && state.eveIdlePhase != EveIdlePhase.TOUCH_BLACKOUT) 1f else 0f,
+        animationSpec = if (!state.isExpanded) {
+            tween(durationMillis = 220, delayMillis = 140, easing = FastOutSlowInEasing)
+        } else {
+            tween(durationMillis = 80, easing = LinearEasing)
+        },
+        label = "compactEyesAlpha"
+    )
 
-        // Lirik realistis sebelum tidur: kiri -> tahan -> kanan -> tahan -> tengah -> kedip mengantuk (~2.2s)
-        val lookX = remember { Animatable(0f) }
-        val drowsy = remember { Animatable(1f) }
-        LaunchedEffect(state.eveIdlePhase) {
-            if (state.eveIdlePhase == EveIdlePhase.PRE_SLEEP_LOOK) {
-                lookX.animateTo(-4f, tween(300, easing = FastOutSlowInEasing))
-                delay(430)
-                lookX.animateTo(4f, tween(400, easing = FastOutSlowInEasing))
-                delay(430)
-                lookX.animateTo(0f, tween(250, easing = FastOutSlowInEasing))
-                drowsy.animateTo(0.15f, tween(130))
-                drowsy.animateTo(0.6f, tween(100))
-                drowsy.animateTo(0.15f, tween(150))
-            } else {
-                lookX.snapTo(0f)
-                drowsy.snapTo(1f)
-            }
-        }
-
-        // zZZ siklus 1.2s, tiap huruf muncul bergantian (Cyan, Amber, Sky Blue)
-        val zPhase by infinite.animateFloat(
-            initialValue = 0f,
-            targetValue = 1f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 1200, easing = LinearEasing),
-                repeatMode = RepeatMode.Restart
-            ),
-            label = "zPhase"
-        )
-        fun zAlpha(index: Int): Float {
-            val local = ((zPhase - index * 0.28f) % 1f + 1f) % 1f
-            return if (local < 0.28f) local / 0.28f else 1f - (local - 0.28f) / 0.72f
-        }
-
-        Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .graphicsLayer { alpha = standbyEyesAlpha }
-                .padding(horizontal = 4.dp, vertical = 2.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            // Left Wing: MATA KIRI EVE
-            Row(
-                modifier = Modifier
-                    .weight(1f)
-                    .offset { IntOffset(lookX.value.dp.roundToPx(), 0) },
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.End
-            ) {
-                EveStandbyEyeRenderer(
-                    phase = state.eveIdlePhase,
-                    blinkScaleY = if (state.eveIdlePhase == EveIdlePhase.PRE_SLEEP_LOOK) drowsy.value else eyeScaleY,
-                    breathingAlpha = breathingAlpha,
-                    isLeft = true
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-            }
-
-            // Punch hole camera clear area in center (23dp Infinix GT 10 Pro)
-            Spacer(modifier = Modifier.width((state.calibration.cameraHoleSizeDp + 6).dp))
-
-            // Right Wing: MATA KANAN EVE + LIVELY ZZZ (Wall-E Theme)
-            Row(
-                modifier = Modifier
-                    .weight(1f)
-                    .offset { IntOffset(lookX.value.dp.roundToPx(), 0) },
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Start
-            ) {
-                Spacer(modifier = Modifier.width(6.dp))
-                EveStandbyEyeRenderer(
-                    phase = state.eveIdlePhase,
-                    blinkScaleY = if (state.eveIdlePhase == EveIdlePhase.PRE_SLEEP_LOOK) drowsy.value else eyeScaleY,
-                    breathingAlpha = breathingAlpha,
-                    isLeft = false
-                )
-
-                // Emot Z Z Z saat tidur nyenyak
-                if (state.eveIdlePhase == EveIdlePhase.SLEEPING_ZZZ) {
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Row(
-                        verticalAlignment = Alignment.Bottom,
-                        horizontalArrangement = Arrangement.spacedBy(1.5.dp)
-                    ) {
-                        Text(
-                            text = "z",
-                            color = EveCyanGlow.copy(alpha = zAlpha(0)),
-                            fontSize = 8.sp,
-                            fontWeight = FontWeight.Bold,
-                            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
-                        )
-                        Text(
-                            text = "Z",
-                            color = WallESolarAmber.copy(alpha = zAlpha(1)),
-                            fontSize = 9.5.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
-                        )
-                        Text(
-                            text = "Z",
-                            color = Color(0xFF38BDF8).copy(alpha = zAlpha(2)),
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Black,
-                            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
-                        )
-                    }
-                }
-            }
-        }
-    } else {
-        // EXPANDED: NUSA MULTI-CARD INTERACTIVE DASHBOARD (Dapat diusap ke kiri/kanan secara manual)
-        var activeTab by remember { mutableStateOf(0) } // 0: Baterai & Daya, 1: Mini Musik, 2: Quick Tools
+    if (state.isExpanded || dashboardAlpha > 0.01f) {
+        // EXPANDED: NUSA MULTI-CARD INTERACTIVE DASHBOARD dengan HorizontalPager
+        val pagerState = rememberPagerState(pageCount = { 3 })
+        val coroutineScope = rememberCoroutineScope()
+        val activeTab = pagerState.currentPage
 
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = 8.dp, bottom = 6.dp, start = 8.dp, end = 8.dp)
-                .pointerInput(Unit) {
-                    var totalDragX = 0f
-                    detectHorizontalDragGestures(
-                        onDragStart = { totalDragX = 0f },
-                        onHorizontalDrag = { _, dragAmount ->
-                            totalDragX += dragAmount
-                            if (totalDragX < -28f) {
-                                activeTab = (activeTab + 1).coerceAtMost(2)
-                                totalDragX = 0f
-                            } else if (totalDragX > 28f) {
-                                activeTab = (activeTab - 1).coerceAtLeast(0)
-                                totalDragX = 0f
-                            }
-                        }
-                    )
-                },
+                .graphicsLayer { alpha = dashboardAlpha }
+                .padding(top = 8.dp, bottom = 6.dp, start = 8.dp, end = 8.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
             // Header Bar
@@ -663,15 +538,15 @@ private fun IdleModuleContent(state: IslandUiState) {
                 }
             }
 
-            // Card Body (Berganti sesuai kartu yang aktif)
-            Box(
+            // Card Body (HorizontalPager agar geser kartu responsif instan dan berseluncur alami)
+            HorizontalPager(
+                state = pagerState,
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    .padding(vertical = 4.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                when (activeTab) {
+                    .padding(vertical = 4.dp)
+            ) { page ->
+                when (page) {
                     0 -> {
                         // KARTU 1: Status Baterai & Performa Infinix GT 10 Pro
                         Row(
@@ -819,7 +694,7 @@ private fun IdleModuleContent(state: IslandUiState) {
                 }
             }
 
-            // Indikator Titik Halaman Dashboard Bawah (Bisa ditekan atau diusap)
+            // Indikator Titik Halaman Dashboard Bawah (Klik titik langsung berpindah)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -843,8 +718,140 @@ private fun IdleModuleContent(state: IslandUiState) {
                                 if (isSelected) EveCyanGlow.copy(alpha = 0.9f)
                                 else Color.White.copy(alpha = 0.25f)
                             )
-                            .clickable { activeTab = i }
+                            .clickable {
+                                coroutineScope.launch {
+                                    pagerState.animateScrollToPage(i)
+                                }
+                            }
                     )
+                }
+            }
+        }
+    } else {
+        // COLLAPSED STANDBY (202dp x 36dp)
+        if (compactEyesAlpha <= 0.01f) {
+            Box(modifier = Modifier.fillMaxSize())
+            return
+        }
+
+        // Animasi bernapas (breathing glow) saat tidur nyenyak
+        val breathingAlpha by infinite.animateFloat(
+            initialValue = 0.55f,
+            targetValue = 1.0f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 1500, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "sleepBreathingAlpha"
+        )
+
+        // Lirik realistis sebelum tidur: kiri -> tahan -> kanan -> tahan -> tengah -> kedip mengantuk (~2.2s)
+        val lookX = remember { Animatable(0f) }
+        val drowsy = remember { Animatable(1f) }
+        LaunchedEffect(state.eveIdlePhase) {
+            if (state.eveIdlePhase == EveIdlePhase.PRE_SLEEP_LOOK) {
+                lookX.animateTo(-4f, tween(300, easing = FastOutSlowInEasing))
+                delay(430)
+                lookX.animateTo(4f, tween(400, easing = FastOutSlowInEasing))
+                delay(430)
+                lookX.animateTo(0f, tween(250, easing = FastOutSlowInEasing))
+                drowsy.animateTo(0.15f, tween(130))
+                drowsy.animateTo(0.6f, tween(100))
+                drowsy.animateTo(0.15f, tween(150))
+            } else {
+                lookX.snapTo(0f)
+                drowsy.snapTo(1f)
+            }
+        }
+
+        // zZZ siklus 1.2s, tiap huruf muncul bergantian (Cyan, Amber, Sky Blue)
+        val zPhase by infinite.animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 1200, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "zPhase"
+        )
+        fun zAlpha(index: Int): Float {
+            val local = ((zPhase - index * 0.28f) % 1f + 1f) % 1f
+            return if (local < 0.28f) local / 0.28f else 1f - (local - 0.28f) / 0.72f
+        }
+
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer { alpha = compactEyesAlpha }
+                .padding(horizontal = 4.dp, vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            // Left Wing: MATA KIRI EVE
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .offset { IntOffset(lookX.value.dp.roundToPx(), 0) },
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.End
+            ) {
+                EveStandbyEyeRenderer(
+                    phase = state.eveIdlePhase,
+                    blinkScaleY = if (state.eveIdlePhase == EveIdlePhase.PRE_SLEEP_LOOK) drowsy.value else eyeScaleY,
+                    breathingAlpha = breathingAlpha,
+                    isLeft = true
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+            }
+
+            // Punch hole camera clear area in center (23dp Infinix GT 10 Pro)
+            Spacer(modifier = Modifier.width((state.calibration.cameraHoleSizeDp + 6).dp))
+
+            // Right Wing: MATA KANAN EVE + LIVELY ZZZ (Wall-E Theme)
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .offset { IntOffset(lookX.value.dp.roundToPx(), 0) },
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Start
+            ) {
+                Spacer(modifier = Modifier.width(6.dp))
+                EveStandbyEyeRenderer(
+                    phase = state.eveIdlePhase,
+                    blinkScaleY = if (state.eveIdlePhase == EveIdlePhase.PRE_SLEEP_LOOK) drowsy.value else eyeScaleY,
+                    breathingAlpha = breathingAlpha,
+                    isLeft = false
+                )
+
+                // Emot Z Z Z saat tidur nyenyak
+                if (state.eveIdlePhase == EveIdlePhase.SLEEPING_ZZZ) {
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Row(
+                        verticalAlignment = Alignment.Bottom,
+                        horizontalArrangement = Arrangement.spacedBy(1.5.dp)
+                    ) {
+                        Text(
+                            text = "z",
+                            color = EveCyanGlow.copy(alpha = zAlpha(0)),
+                            fontSize = 8.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                        )
+                        Text(
+                            text = "Z",
+                            color = WallESolarAmber.copy(alpha = zAlpha(1)),
+                            fontSize = 9.5.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                        )
+                        Text(
+                            text = "Z",
+                            color = Color(0xFF38BDF8).copy(alpha = zAlpha(2)),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Black,
+                            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                        )
+                    }
                 }
             }
         }
