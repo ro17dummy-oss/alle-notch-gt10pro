@@ -31,6 +31,17 @@ jobs:
           set -o pipefail
           gradle assembleDebug assembleRelease --stacktrace 2>&1 | tee build.log
 
+      - name: Push Error Log on Failure
+        if: failure()
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git checkout -B build-error-log
+          cp build.log compile_error.txt
+          git add compile_error.txt
+          git commit -m "ci: capture compilation error log" || true
+          git push -f origin build-error-log || true
+
       - name: Upload Build Log
         if: always()
         uses: actions/upload-artifact@v4
