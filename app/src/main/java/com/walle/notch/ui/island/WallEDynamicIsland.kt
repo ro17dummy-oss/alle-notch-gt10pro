@@ -414,6 +414,7 @@ private fun NotchBody(
  * Saat Collapse: Wajah EVE imut mengapit kamera.
  * Saat Expand: Tampilan sama persis seperti Collapse namun dalam skala besar (Giant EVE Visor 2.35x)
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun IdleModuleContent(state: IslandUiState) {
     val infinite = rememberInfiniteTransition(label = "cuteAnimations")
