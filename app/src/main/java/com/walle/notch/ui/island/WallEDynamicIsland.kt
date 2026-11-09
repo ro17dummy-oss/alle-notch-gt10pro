@@ -726,7 +726,7 @@ private fun IdleModuleContent(state: IslandUiState) {
 
                                 Column {
                                     Row(
-                                        verticalAlignment = Alignment.Baseline,
+                                        verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(5.dp)
                                     ) {
                                         Text(

@@ -29,27 +29,7 @@ jobs:
           gradle-version: '8.7'
 
       - name: Build Debug & Release Signed APK
-        run: |
-          set -o pipefail
-          gradle assembleDebug assembleRelease --stacktrace 2>&1 | tee build.log
-
-      - name: Push Error Log on Failure
-        if: failure()
-        run: |
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
-          git checkout -B build-error-log
-          cp build.log compile_error.txt
-          git add compile_error.txt
-          git commit -m "ci: capture compilation error log" || true
-          git push -f origin build-error-log || true
-
-      - name: Upload Build Log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-log
-          path: build.log
+        run: gradle assembleDebug assembleRelease --stacktrace
 
       - name: Upload Wall-E Notch Debug APK
         uses: actions/upload-artifact@v4
