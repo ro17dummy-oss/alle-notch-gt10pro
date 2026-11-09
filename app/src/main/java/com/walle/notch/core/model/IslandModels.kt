@@ -98,6 +98,30 @@ data class CallTimerState(
     val declineIntent: PendingIntent? = null
 )
 
+data class PrayerSchedule(
+    val cityName: String = "Padang",
+    val subuh: String = "04:40",
+    val dzuhur: String = "12:05",
+    val ashar: String = "15:27",
+    val maghrib: String = "18:10",
+    val isya: String = "19:22",
+    val nextPrayerName: String = "Subuh",
+    val nextPrayerTime: String = "04:40",
+    val countdownText: String = "in 8 h 18 min",
+    val celestialProgress: Float = 0.88f // 0.0f..1.0f sepanjang busur lengkung langit
+)
+
+data class TodoItem(
+    val id: Int,
+    val text: String,
+    val isDone: Boolean = false
+)
+
+data class StopwatchState(
+    val isRunning: Boolean = false,
+    val elapsedMillis: Long = 0L
+)
+
 data class IslandUiState(
     val mode: IslandMode = IslandMode.IDLE,
     val eveMood: EveMood = EveMood.HAPPY,
@@ -114,6 +138,13 @@ data class IslandUiState(
     val notification: NotificationPayload? = null,
     val battery: BatteryTelemetry = BatteryTelemetry(),
     val callTimer: CallTimerState = CallTimerState(),
+    val prayer: PrayerSchedule = PrayerSchedule(),
+    val todoList: List<TodoItem> = listOf(
+        TodoItem(1, "Beli charger 45W GT 10 Pro", false),
+        TodoItem(2, "Review update Wall-E Notch", true),
+        TodoItem(3, "Backup data game", false)
+    ),
+    val stopwatch: StopwatchState = StopwatchState(),
     val isOverlayServiceRunning: Boolean = false,
     val isNotificationListenerConnected: Boolean = false,
     val lastFeedbackMessage: String? = null

@@ -82,6 +82,7 @@ import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
@@ -189,11 +190,11 @@ private fun NotchBody(
     val isAppPeek = rawPeek || (heldPeek && canHoldPeek)
 
     // Satu "bahasa gerak" untuk semua properti morph (lebar, tinggi, sudut, radius):
-    // masuk peek lebih cepat (~65% durasi keluar), keluar peek tanpa membal, expand tetap sedikit membal.
+    // masuk peek lebih cepat (~65% durasi keluar), keluar peek tanpa membal, expand critically damped (850f) tanpa goyang.
     val morphSpec = when {
         isAppPeek -> spring<Dp>(dampingRatio = 1f, stiffness = 1300f)
-        state.isExpanded -> spring<Dp>(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow)
-        else -> spring<Dp>(dampingRatio = 1f, stiffness = 600f)
+        state.isExpanded -> spring<Dp>(dampingRatio = 1f, stiffness = 850f)
+        else -> spring<Dp>(dampingRatio = 1f, stiffness = 650f)
     }
 
     val cornerWidth by animateDpAsState(
@@ -229,7 +230,7 @@ private fun NotchBody(
     val normalHeight: Dp = when {
         isHiddenInCamera -> cal.cameraHoleSizeDp.dp
         state.isExpanded -> when (state.mode) {
-            IslandMode.IDLE -> 110.dp          // Multi-Card Dashboard
+            IslandMode.IDLE -> 122.dp          // 4-Card Dashboard (Musik, Sholat, To-Do, Stopwatch)
             IslandMode.MUSIC -> 148.dp
             IslandMode.SOLAR_CHARGE -> 114.dp
             IslandMode.NOTIFICATION -> 110.dp  // Tinggi pas untuk balas cepat tanpa mubazir
@@ -289,12 +290,6 @@ private fun NotchBody(
             }
             .width(animatedWidth)
             .height(animatedHeight)
-            .shadow(
-                elevation = if (state.isExpanded) 18.dp else 6.dp,
-                shape = notchShape,
-                ambientColor = PitchBlack,
-                spotColor = PitchBlack
-            )
             .clip(notchShape)
             .background(PitchBlack)
             .pointerInput(state.isExpanded, state.mode, isAppPeek) {
@@ -482,9 +477,10 @@ private fun IdleModuleContent(state: IslandUiState) {
 
     if (state.isExpanded || dashboardAlpha > 0.01f) {
         // EXPANDED: NUSA MULTI-CARD INTERACTIVE DASHBOARD dengan HorizontalPager
-        val pagerState = rememberPagerState(pageCount = { 3 })
+        val pagerState = rememberPagerState(pageCount = { 4 })
         val coroutineScope = rememberCoroutineScope()
         val activeTab = pagerState.currentPage
+        val view = LocalView.current
 
         Column(
             modifier = Modifier
@@ -504,13 +500,15 @@ private fun IdleModuleContent(state: IslandUiState) {
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     val headerTitle = when (activeTab) {
-                        0 -> "GT 10 PRO · DAYA"
-                        1 -> "EVE · PEMUTAR MUSIK"
-                        else -> "KONTROL CEPAT · ALAT"
+                        0 -> "EVE · PEMUTAR MUSIK"
+                        1 -> "PRAYER · ${state.prayer.cityName.uppercase()}"
+                        2 -> "CATATAN & PENGINGAT"
+                        else -> "STOPWATCH DIGITAL"
                     }
                     val headerColor = when (activeTab) {
-                        0 -> WallESolarAmber
-                        1 -> EveCyanGlow
+                        0 -> EveCyanGlow
+                        1 -> Color(0xFF38BDF8)
+                        2 -> WallESolarAmber
                         else -> DirectivePlantGreen
                     }
                     Box(
@@ -539,7 +537,7 @@ private fun IdleModuleContent(state: IslandUiState) {
                 }
             }
 
-            // Card Body (HorizontalPager agar geser kartu responsif instan dan berseluncur alami)
+            // Card Body (HorizontalPager 4 Kartu: Musik, Sholat, To-Do, Stopwatch)
             HorizontalPager(
                 state = pagerState,
                 modifier = Modifier
@@ -549,146 +547,355 @@ private fun IdleModuleContent(state: IslandUiState) {
             ) { page ->
                 when (page) {
                     0 -> {
-                        // KARTU 1: Status Baterai & Performa Infinix GT 10 Pro
+                        // KARTU 0: Pemutar Musik (Sesuai referensi gambar user, tanpa header jam & tanpa balon lirik)
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .fillMaxHeight(),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            Column {
+                            // Album Art Squircle di Kiri
+                            Box(
+                                modifier = Modifier
+                                    .size(54.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(Color(0xFF1E222A)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (state.music.albumArt != null) {
+                                    Image(
+                                        bitmap = state.music.albumArt.asImageBitmap(),
+                                        contentDescription = "Cover",
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                } else {
+                                    Text(
+                                        text = "🎵",
+                                        fontSize = 22.sp
+                                    )
+                                }
+                            }
+
+                            // Bagian Kanan: Judul, Seekbar, Tombol Kontrol
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight(),
+                                verticalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                // Judul & Artis
+                                Column {
+                                    Text(
+                                        text = if (state.music.title.isNotBlank()) state.music.title else "Not Playing",
+                                        color = Color.White,
+                                        fontSize = 12.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        text = if (state.music.artist.isNotBlank()) state.music.artist else "EVE Audio Track",
+                                        color = Color(0xFF94A3B8),
+                                        fontSize = 9.5.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+
+                                // Seekbar Progress Line: 00:00 --- [Bar] --- -03:45
                                 Row(
+                                    modifier = Modifier.fillMaxWidth(),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
                                     Text(
-                                        text = "${state.battery.level}%",
-                                        color = Color.White,
-                                        fontSize = 22.sp,
-                                        fontWeight = FontWeight.Black,
+                                        text = formatDuration(state.music.positionMs),
+                                        color = Color(0xFF94A3B8),
+                                        fontSize = 8.5.sp,
                                         fontFamily = FontFamily.Monospace
                                     )
                                     Box(
                                         modifier = Modifier
-                                            .clip(RoundedCornerShape(6.dp))
-                                            .background(
-                                                if (state.battery.isFastCharging45W) WallESolarAmber.copy(alpha = 0.2f)
-                                                else Color.White.copy(alpha = 0.1f)
-                                            )
-                                            .border(
-                                                1.dp,
-                                                if (state.battery.isFastCharging45W) WallESolarAmber.copy(alpha = 0.5f)
-                                                else Color.White.copy(alpha = 0.2f),
-                                                RoundedCornerShape(6.dp)
-                                            )
-                                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                                            .weight(1f)
+                                            .height(3.dp)
+                                            .clip(CircleShape)
+                                            .background(Color.White.copy(alpha = 0.15f))
                                     ) {
-                                        Text(
-                                            text = if (state.battery.isFastCharging45W) "45W BYPASS" else if (state.battery.isCharging) "CHARGING" else "STANDBY",
-                                            color = if (state.battery.isFastCharging45W) WallESolarAmber else Color(0xFF94A3B8),
-                                            fontSize = 9.sp,
-                                            fontWeight = FontWeight.Bold
+                                        val progressFraction = if (state.music.durationMs > 0) {
+                                            (state.music.positionMs.toFloat() / state.music.durationMs).coerceIn(0f, 1f)
+                                        } else 0.35f
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxHeight()
+                                                .fillMaxWidth(progressFraction)
+                                                .background(Color.White)
                                         )
                                     }
-                                }
-                            }
-
-                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                Column(horizontalAlignment = Alignment.End) {
-                                    Text(text = "Suhu", color = Color(0xFF94A3B8), fontSize = 9.sp)
+                                    val remainingMs = (state.music.durationMs - state.music.positionMs).coerceAtLeast(0L)
                                     Text(
-                                        text = "${state.battery.temperatureCelsius}°C",
-                                        color = if (state.battery.temperatureCelsius > 40f) AxiomAlertRed else Color.White,
-                                        fontSize = 11.5.sp,
-                                        fontWeight = FontWeight.Bold
+                                        text = "-${formatDuration(remainingMs)}",
+                                        color = Color(0xFF94A3B8),
+                                        fontSize = 8.5.sp,
+                                        fontFamily = FontFamily.Monospace
                                     )
                                 }
-                                Column(horizontalAlignment = Alignment.End) {
-                                    Text(text = "Tegangan", color = Color(0xFF94A3B8), fontSize = 9.sp)
+
+                                // Kontrol Bawah: ⏮   ▶/⏸   ⏭   dan 🔊 di Kanan (Tanpa balon kutipan)
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Spacer(modifier = Modifier.width(18.dp)) // Penyeimbang kiri
+
+                                    // Tombol Media Tengah
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                                    ) {
+                                        Text(
+                                            text = "⏮",
+                                            color = Color.White,
+                                            fontSize = 14.sp,
+                                            modifier = Modifier.clickable { IslandRepository.onMediaPrevious?.invoke() }
+                                        )
+                                        Box(
+                                            modifier = Modifier
+                                                .size(24.dp)
+                                                .clip(CircleShape)
+                                                .background(if (state.music.isPlaying) EveCyanGlow else Color.White.copy(alpha = 0.2f))
+                                                .clickable { IslandRepository.onMediaPlayPause?.invoke() },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text = if (state.music.isPlaying) "⏸" else "▶",
+                                                color = if (state.music.isPlaying) PitchBlack else Color.White,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                        Text(
+                                            text = "⏭",
+                                            color = Color.White,
+                                            fontSize = 14.sp,
+                                            modifier = Modifier.clickable { IslandRepository.onMediaNext?.invoke() }
+                                        )
+                                    }
+
+                                    // Ikon Speaker Kanan
                                     Text(
-                                        text = "${state.battery.voltageMv} mV",
-                                        color = Color.White,
-                                        fontSize = 11.5.sp,
-                                        fontWeight = FontWeight.Bold
+                                        text = "🔊",
+                                        fontSize = 12.sp
                                     )
                                 }
                             }
                         }
                     }
                     1 -> {
-                        // KARTU 2: Mini Musik Kontrol
+                        // KARTU 1: Pengingat Sholat (Sesuai referensi gambar user, tanpa header jam)
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .fillMaxHeight(),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = state.music.title,
-                                    color = Color.White,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Text(
-                                    text = state.music.artist,
-                                    color = Color(0xFF94A3B8),
-                                    fontSize = 10.sp,
-                                    maxLines = 1
+                            // Sisi Kiri: Info Sholat Berikutnya
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight(),
+                                verticalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Column {
+                                    Text(
+                                        text = "Next",
+                                        color = Color(0xFF94A3B8),
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    Text(
+                                        text = state.prayer.nextPrayerName,
+                                        color = Color.White,
+                                        fontSize = 20.sp,
+                                        fontWeight = FontWeight.Black
+                                    )
+                                }
+
+                                Column {
+                                    Row(
+                                        verticalAlignment = Alignment.Baseline,
+                                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                                    ) {
+                                        Text(
+                                            text = state.prayer.nextPrayerTime,
+                                            color = Color.White,
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            fontFamily = FontFamily.Monospace
+                                        )
+                                        Text(
+                                            text = state.prayer.countdownText,
+                                            color = Color(0xFF38BDF8),
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.height(3.dp))
+                                    // Progress Bar Kecil
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth(0.85f)
+                                            .height(2.5.dp)
+                                            .clip(CircleShape)
+                                            .background(Color.White.copy(alpha = 0.15f))
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxHeight()
+                                                .fillMaxWidth(state.prayer.celestialProgress)
+                                                .background(Color(0xFF38BDF8))
+                                        )
+                                    }
+                                }
+                            }
+
+                            // Sisi Kanan: Busur Lengkung Langit (Celestial Arc) + Bola Bercahaya (Glowing Orb)
+                            Box(
+                                modifier = Modifier
+                                    .width(155.dp)
+                                    .fillMaxHeight(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CelestialPrayerArc(
+                                    progress = state.prayer.celestialProgress
                                 )
                             }
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                PillActionButton(text = "⏮", bg = Color.White.copy(alpha = 0.1f), fg = Color.White) {
-                                    IslandRepository.onMediaPrevious?.invoke()
-                                }
-                                PillActionButton(
-                                    text = if (state.music.isPlaying) "⏸" else "▶",
-                                    bg = EveCyanGlow,
-                                    fg = PitchBlack
+                        }
+                    }
+                    2 -> {
+                        // KARTU 2: Catatan Kecil (Opsi B: Mini To-Do Checklist yang dapat dicentang)
+                        Column(
+                            modifier = Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            state.todoList.take(3).forEach { item ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .clickable {
+                                            try {
+                                                view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                                            } catch (_: Exception) {}
+                                            IslandRepository.toggleTodoItem(item.id)
+                                        }
+                                        .padding(horizontal = 4.dp, vertical = 2.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    IslandRepository.onMediaPlayPause?.invoke()
-                                }
-                                PillActionButton(text = "⏭", bg = Color.White.copy(alpha = 0.1f), fg = Color.White) {
-                                    IslandRepository.onMediaNext?.invoke()
+                                    // Checkbox Squircle
+                                    Box(
+                                        modifier = Modifier
+                                            .size(16.dp)
+                                            .clip(RoundedCornerShape(4.dp))
+                                            .background(
+                                                if (item.isDone) DirectivePlantGreen else Color.White.copy(alpha = 0.12f)
+                                            )
+                                            .border(
+                                                1.dp,
+                                                if (item.isDone) DirectivePlantGreen else Color.White.copy(alpha = 0.25f),
+                                                RoundedCornerShape(4.dp)
+                                            ),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        if (item.isDone) {
+                                            Text(
+                                                text = "✓",
+                                                color = PitchBlack,
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Black
+                                            )
+                                        }
+                                    }
+
+                                    // Teks Tugas
+                                    Text(
+                                        text = item.text,
+                                        color = if (item.isDone) Color(0xFF64748B) else Color.White,
+                                        fontSize = 10.5.sp,
+                                        fontWeight = if (item.isDone) FontWeight.Normal else FontWeight.Medium,
+                                        textDecoration = if (item.isDone) TextDecoration.LineThrough else null,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
                                 }
                             }
                         }
                     }
                     else -> {
-                        // KARTU 3: Quick Action Tools
+                        // KARTU 3: Stopwatch Digital
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            PillActionButton(
-                                modifier = Modifier.weight(1f),
-                                text = "💤 Tidur Cepat",
-                                bg = Color.White.copy(alpha = 0.1f),
-                                fg = EveCyanGlow
+                            // Digit Display Monospace di Kiri
+                            Column(
+                                verticalArrangement = Arrangement.Center
                             ) {
-                                IslandRepository.triggerQuickNap()
-                                IslandRepository.setExpanded(false)
+                                val totalMs = state.stopwatch.elapsedMillis
+                                val minutes = (totalMs / 60000)
+                                val seconds = (totalMs % 60000) / 1000
+                                val millis = (totalMs % 1000) / 100
+                                val timeString = String.format("%02d:%02d.%01d", minutes, seconds, millis)
+
+                                Text(
+                                    text = timeString,
+                                    color = EveCyanGlow,
+                                    fontSize = 24.sp,
+                                    fontWeight = FontWeight.Black,
+                                    fontFamily = FontFamily.Monospace,
+                                    letterSpacing = 1.sp
+                                )
+                                Text(
+                                    text = if (state.stopwatch.isRunning) "STOPWATCH BERJALAN" else "SIAP",
+                                    color = if (state.stopwatch.isRunning) DirectivePlantGreen else Color(0xFF94A3B8),
+                                    fontSize = 8.5.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
                             }
-                            PillActionButton(
-                                modifier = Modifier.weight(1f),
-                                text = "☀️ Solar Charge",
-                                bg = Color.White.copy(alpha = 0.1f),
-                                fg = WallESolarAmber
+
+                            // Tombol Aksi di Kanan
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                IslandRepository.setMode(IslandMode.SOLAR_CHARGE, expand = true)
-                            }
-                            PillActionButton(
-                                modifier = Modifier.weight(1f),
-                                text = "👀 Bangunkan",
-                                bg = Color.White.copy(alpha = 0.1f),
-                                fg = Color.White
-                            ) {
-                                IslandRepository.restartEveIdleCountdown()
-                                IslandRepository.setExpanded(false)
+                                // Tombol Reset
+                                PillActionButton(
+                                    text = "↺ Reset",
+                                    bg = Color.White.copy(alpha = 0.1f),
+                                    fg = Color.White
+                                ) {
+                                    IslandRepository.resetStopwatch()
+                                }
+
+                                // Tombol Start / Pause
+                                PillActionButton(
+                                    text = if (state.stopwatch.isRunning) "⏸ Jeda" else "▶ Mulai",
+                                    bg = if (state.stopwatch.isRunning) WallESolarAmber else EveCyanGlow,
+                                    fg = PitchBlack
+                                ) {
+                                    if (state.stopwatch.isRunning) {
+                                        IslandRepository.pauseStopwatch()
+                                    } else {
+                                        IslandRepository.startStopwatch()
+                                    }
+                                }
                             }
                         }
                     }
@@ -703,7 +910,7 @@ private fun IdleModuleContent(state: IslandUiState) {
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                for (i in 0..2) {
+                for (i in 0..3) {
                     val isSelected = i == activeTab
                     val dotWidth by animateDpAsState(
                         targetValue = if (isSelected) 14.dp else 4.dp,
@@ -856,6 +1063,110 @@ private fun IdleModuleContent(state: IslandUiState) {
                 }
             }
         }
+    }
+}
+
+private fun formatDuration(millis: Long): String {
+    val totalSec = (millis / 1000).coerceAtLeast(0L)
+    val m = totalSec / 60
+    val s = totalSec % 60
+    return String.format("%02d:%02d", m, s)
+}
+
+/**
+ * Busur Lengkung Langit (Celestial Arc) untuk Pengingat Sholat:
+ * Menggambar kurva lengkung parabola dengan 5 titik waktu sholat dan bola matahari/bulan
+ * bercahaya (glowing orb) yang bergerak secara dinamis mengikuti waktu saat ini.
+ */
+@Composable
+private fun CelestialPrayerArc(
+    progress: Float,
+    modifier: Modifier = Modifier
+) {
+    Canvas(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(58.dp)
+    ) {
+        val w = size.width
+        val h = size.height
+        val baselineY = h * 0.70f
+        val peakY = h * 0.12f
+
+        val arcPath = Path().apply {
+            moveTo(6.dp.toPx(), baselineY)
+            quadraticBezierTo(w * 0.5f, peakY, w - 6.dp.toPx(), baselineY)
+        }
+
+        // Area bayangan gradasi di bawah busur
+        val fillPath = Path().apply {
+            moveTo(6.dp.toPx(), baselineY)
+            quadraticBezierTo(w * 0.5f, peakY, w - 6.dp.toPx(), baselineY)
+            lineTo(w - 6.dp.toPx(), baselineY + 2.dp.toPx())
+            lineTo(6.dp.toPx(), baselineY + 2.dp.toPx())
+            close()
+        }
+        drawPath(
+            path = fillPath,
+            brush = Brush.verticalGradient(
+                listOf(Color(0xFF38BDF8).copy(alpha = 0.20f), Color.Transparent)
+            )
+        )
+
+        // Garis busur lengkung gradasi
+        drawPath(
+            path = arcPath,
+            brush = Brush.horizontalGradient(
+                listOf(Color(0xFF38BDF8), Color(0xFF818CF8), Color(0xFFF59E0B))
+            ),
+            style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
+        )
+
+        // 5 Titik Sholat sepanjang busur (Subuh, Dzuhur, Ashar, Maghrib, Isya)
+        val tValues = floatArrayOf(0.0f, 0.28f, 0.54f, 0.78f, 1.0f)
+        val startX = 6.dp.toPx()
+        val endX = w - 6.dp.toPx()
+
+        for (t in tValues) {
+            val u = 1f - t
+            val px = u * u * startX + 2 * u * t * (w * 0.5f) + t * t * endX
+            val py = u * u * baselineY + 2 * u * t * peakY + t * t * baselineY
+            drawCircle(
+                color = Color.White.copy(alpha = 0.65f),
+                radius = 2.2.dp.toPx(),
+                center = Offset(px, py)
+            )
+        }
+
+        // Posisi Bola Matahari / Bulan Bercahaya (Glowing Orb)
+        val orbT = progress.coerceIn(0.05f, 0.95f)
+        val uOrb = 1f - orbT
+        val orbX = uOrb * uOrb * startX + 2 * uOrb * orbT * (w * 0.5f) + orbT * orbT * endX
+        val orbY = uOrb * uOrb * baselineY + 2 * uOrb * orbT * peakY + orbT * orbT * baselineY
+
+        // Aura cahaya luar
+        drawCircle(
+            brush = Brush.radialGradient(
+                listOf(Color(0xFFFBBF24).copy(alpha = 0.55f), Color.Transparent),
+                center = Offset(orbX, orbY),
+                radius = 12.dp.toPx()
+            ),
+            radius = 12.dp.toPx(),
+            center = Offset(orbX, orbY)
+        )
+        // Cincin luar
+        drawCircle(
+            color = Color(0xFFFBBF24).copy(alpha = 0.5f),
+            radius = 5.5.dp.toPx(),
+            center = Offset(orbX, orbY),
+            style = Stroke(width = 1.2.dp.toPx())
+        )
+        // Inti bola putih terang
+        drawCircle(
+            color = Color.White,
+            radius = 3.5.dp.toPx(),
+            center = Offset(orbX, orbY)
+        )
     }
 }
 

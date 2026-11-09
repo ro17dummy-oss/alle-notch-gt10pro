@@ -11,6 +11,11 @@ import com.walle.notch.core.model.IslandMode
 import com.walle.notch.core.model.IslandUiState
 import com.walle.notch.core.model.MusicState
 import com.walle.notch.core.model.NotificationPayload
+import com.walle.notch.core.model.PrayerSchedule
+import com.walle.notch.core.model.StopwatchState
+import com.walle.notch.core.model.TodoItem
+import java.util.Calendar
+import java.util.TimeZone
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -274,6 +279,7 @@ object IslandRepository {
     fun setExpanded(expanded: Boolean) {
         if (expanded) {
             transientBannerJob?.cancel()
+            refreshPrayerTimes()
         }
         _uiState.update { it.copy(isExpanded = expanded) }
     }
@@ -370,5 +376,85 @@ object IslandRepository {
 
     fun postFeedback(message: String?) {
         _uiState.update { it.copy(lastFeedbackMessage = message) }
+    }
+
+    private var stopwatchJob: Job? = null
+
+    fun toggleTodoItem(id: Int) {
+        _uiState.update { state ->
+            val updated = state.todoList.map {
+                if (it.id == id) it.copy(isDone = !it.isDone) else it
+            }
+            state.copy(todoList = updated)
+        }
+    }
+
+    fun startStopwatch() {
+        if (_uiState.value.stopwatch.isRunning) return
+        _uiState.update { it.copy(stopwatch = it.stopwatch.copy(isRunning = true)) }
+        stopwatchJob?.cancel()
+        stopwatchJob = repoScope.launch {
+            var lastTick = System.currentTimeMillis()
+            while (_uiState.value.stopwatch.isRunning) {
+                delay(60L)
+                val now = System.currentTimeMillis()
+                val delta = now - lastTick
+                lastTick = now
+                _uiState.update {
+                    it.copy(stopwatch = it.stopwatch.copy(elapsedMillis = it.stopwatch.elapsedMillis + delta))
+                }
+            }
+        }
+    }
+
+    fun pauseStopwatch() {
+        stopwatchJob?.cancel()
+        _uiState.update { it.copy(stopwatch = it.stopwatch.copy(isRunning = false)) }
+    }
+
+    fun resetStopwatch() {
+        stopwatchJob?.cancel()
+        _uiState.update { it.copy(stopwatch = StopwatchState(isRunning = false, elapsedMillis = 0L)) }
+    }
+
+    fun refreshPrayerTimes() {
+        val cal = Calendar.getInstance(TimeZone.getTimeZone("Asia/Jakarta"))
+        val currentMinutes = cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE)
+        val prayers = listOf(
+            Triple("Subuh", 280, "04:40"),
+            Triple("Dzuhur", 725, "12:05"),
+            Triple("Ashar", 927, "15:27"),
+            Triple("Maghrib", 1090, "18:10"),
+            Triple("Isya", 1162, "19:22")
+        )
+        val next = prayers.firstOrNull { it.second > currentMinutes }
+            ?: Triple("Subuh", 280 + 1440, "04:40")
+        val diffMinutes = if (next.second >= currentMinutes) next.second - currentMinutes else (next.second + 1440) - currentMinutes
+        val hours = diffMinutes / 60
+        val mins = diffMinutes % 60
+        val countdown = if (hours > 0) "in ${hours} h ${mins} min" else "in ${mins} min"
+
+        val progress = when {
+            currentMinutes < 280 -> 0.95f
+            currentMinutes > 1162 -> 0.92f
+            else -> ((currentMinutes - 280).toFloat() / (1162 - 280)).coerceIn(0.05f, 0.95f)
+        }
+
+        _uiState.update { state ->
+            state.copy(
+                prayer = PrayerSchedule(
+                    cityName = "Padang",
+                    subuh = "04:40",
+                    dzuhur = "12:05",
+                    ashar = "15:27",
+                    maghrib = "18:10",
+                    isya = "19:22",
+                    nextPrayerName = next.first,
+                    nextPrayerTime = next.third,
+                    countdownText = countdown,
+                    celestialProgress = progress
+                )
+            )
+        }
     }
 }
