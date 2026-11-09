@@ -852,7 +852,7 @@ private fun IdleModuleContent(state: IslandUiState) {
                                 val minutes = (totalMs / 60000)
                                 val seconds = (totalMs % 60000) / 1000
                                 val millis = (totalMs % 1000) / 100
-                                val timeString = String.format("%02d:%02d.%01d", minutes, seconds, millis)
+                                val timeString = "%02d:%02d.%d".format(minutes, seconds, millis)
 
                                 Text(
                                     text = timeString,
@@ -1070,7 +1070,7 @@ private fun formatDuration(millis: Long): String {
     val totalSec = (millis / 1000).coerceAtLeast(0L)
     val m = totalSec / 60
     val s = totalSec % 60
-    return String.format("%02d:%02d", m, s)
+    return "%02d:%02d".format(m, s)
 }
 
 /**
@@ -1129,8 +1129,8 @@ private fun CelestialPrayerArc(
 
         for (t in tValues) {
             val u = 1f - t
-            val px = u * u * startX + 2 * u * t * (w * 0.5f) + t * t * endX
-            val py = u * u * baselineY + 2 * u * t * peakY + t * t * baselineY
+            val px = u * u * startX + 2f * u * t * (w * 0.5f) + t * t * endX
+            val py = u * u * baselineY + 2f * u * t * peakY + t * t * baselineY
             drawCircle(
                 color = Color.White.copy(alpha = 0.65f),
                 radius = 2.2.dp.toPx(),
@@ -1141,8 +1141,8 @@ private fun CelestialPrayerArc(
         // Posisi Bola Matahari / Bulan Bercahaya (Glowing Orb)
         val orbT = progress.coerceIn(0.05f, 0.95f)
         val uOrb = 1f - orbT
-        val orbX = uOrb * uOrb * startX + 2 * uOrb * orbT * (w * 0.5f) + orbT * orbT * endX
-        val orbY = uOrb * uOrb * baselineY + 2 * uOrb * orbT * peakY + orbT * orbT * baselineY
+        val orbX = uOrb * uOrb * startX + 2f * uOrb * orbT * (w * 0.5f) + orbT * orbT * endX
+        val orbY = uOrb * uOrb * baselineY + 2f * uOrb * orbT * peakY + orbT * orbT * baselineY
 
         // Aura cahaya luar
         drawCircle(
