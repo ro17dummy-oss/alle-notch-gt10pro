@@ -158,7 +158,7 @@ data class IslandUiState(
             (calibration.hideWhenAppOpen && isAppOpen) ||
                 isMenuOrDrawerOpen ||
                 (calibration.hideWhenMenuScrolled && isNotificationShadeOpen)
-            ) && mode == IslandMode.IDLE && !isExpanded && !isNotchHidden
+            ) && !isExpanded && !isNotchHidden
 
     /** Notch disembunyikan total (0dp / GONE): hanya di Lock Screen atau layar horizontal (landscape) */
     val isNotchHidden: Boolean

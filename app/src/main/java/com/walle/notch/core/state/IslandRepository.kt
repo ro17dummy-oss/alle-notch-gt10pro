@@ -155,7 +155,7 @@ object IslandRepository {
     fun setAppOpen(isApp: Boolean) {
         val wasPeek = _uiState.value.isAppPeek
         _uiState.update { it.copy(isAppOpen = isApp) }
-        if (isApp && _uiState.value.isExpanded && _uiState.value.mode == IslandMode.IDLE) {
+        if (isApp && _uiState.value.isExpanded) {
             setExpanded(false)
         }
         syncPeekLifecycle(wasPeek, _uiState.value.isAppPeek)
@@ -402,6 +402,21 @@ object IslandRepository {
                 if (it.id == id) it.copy(isDone = !it.isDone) else it
             }
             state.copy(todoList = updated)
+        }
+    }
+
+    fun addTodoItem(text: String) {
+        val trimmed = text.trim()
+        if (trimmed.isBlank()) return
+        _uiState.update { state ->
+            val nextId = (state.todoList.maxOfOrNull { it.id } ?: 0) + 1
+            state.copy(todoList = state.todoList + TodoItem(id = nextId, text = trimmed, isDone = false))
+        }
+    }
+
+    fun deleteTodoItem(id: Int) {
+        _uiState.update { state ->
+            state.copy(todoList = state.todoList.filterNot { it.id == id })
         }
     }
 

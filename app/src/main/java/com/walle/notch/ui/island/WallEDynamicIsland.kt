@@ -149,13 +149,6 @@ private fun NotchBody(
         }
     }
 
-    // Auto-collapse seperti Nusa / Dynamic Island setelah 7 detik tanpa interaksi
-    LaunchedEffect(state.isExpanded, state.eveMood, state.mode, state.music.isPlaying) {
-        if (state.isExpanded && state.mode != IslandMode.NOTIFICATION) {
-            delay(7500L)
-            IslandRepository.setExpanded(false)
-        }
-    }
 
     // Perilaku sembunyi otomatis sesuai permintaan pengguna:
     // 1. Hilang sepenuhnya jika layar horizontal
@@ -232,8 +225,8 @@ private fun NotchBody(
     val normalHeight: Dp = when {
         isHiddenInCamera -> cal.cameraHoleSizeDp.dp
         state.isExpanded -> when (state.mode) {
-            IslandMode.IDLE -> 128.dp          // 4-Card Dashboard (Musik, Sholat, To-Do, Stopwatch)
-            IslandMode.MUSIC -> 148.dp
+            IslandMode.IDLE -> 144.dp          // 4-Card Dashboard (Musik, Sholat, Catatan, Stopwatch)
+            IslandMode.MUSIC -> 144.dp         // Konsisten 144dp saat expand
             IslandMode.SOLAR_CHARGE -> 114.dp
             IslandMode.NOTIFICATION -> 110.dp  // Tinggi pas untuk balas cepat tanpa mubazir
             IslandMode.CALL_TIMER -> 124.dp
@@ -380,15 +373,19 @@ private fun NotchBody(
                     .padding(horizontal = contentHorizontalPad),
                 contentAlignment = Alignment.TopCenter
             ) {
-                when (state.mode) {
-                    IslandMode.IDLE -> IdleModuleContent(state)
-                    IslandMode.MUSIC -> MusicModuleContent(state)
-                    IslandMode.SOLAR_CHARGE -> SolarChargeModuleContent(state)
-                    IslandMode.NOTIFICATION -> NotificationModuleContent(
+                when {
+                    state.isExpanded && (state.mode == IslandMode.IDLE || state.mode == IslandMode.MUSIC) -> {
+                        IdleModuleContent(state, onRequestKeyboardFocus)
+                    }
+                    state.mode == IslandMode.IDLE -> IdleModuleContent(state, onRequestKeyboardFocus)
+                    state.mode == IslandMode.MUSIC -> MusicModuleContent(state)
+                    state.mode == IslandMode.SOLAR_CHARGE -> SolarChargeModuleContent(state)
+                    state.mode == IslandMode.NOTIFICATION -> NotificationModuleContent(
                         state = state,
                         onFocusInput = onRequestKeyboardFocus
                     )
-                    IslandMode.CALL_TIMER -> CallTimerModuleContent(state)
+                    state.mode == IslandMode.CALL_TIMER -> CallTimerModuleContent(state)
+                    else -> IdleModuleContent(state, onRequestKeyboardFocus)
                 }
             }
         }
@@ -413,7 +410,10 @@ private fun NotchBody(
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun IdleModuleContent(state: IslandUiState) {
+private fun IdleModuleContent(
+    state: IslandUiState,
+    onRequestKeyboardFocus: ((Boolean) -> Unit)? = null
+) {
     val infinite = rememberInfiniteTransition(label = "cuteAnimations")
 
     val eyeScaleY by infinite.animateFloat(
@@ -481,15 +481,21 @@ private fun IdleModuleContent(state: IslandUiState) {
         // EXPANDED: NUSA MULTI-CARD INTERACTIVE DASHBOARD dengan HorizontalPager
         val context = LocalContext.current
         val pagerState = rememberPagerState(
-            initialPage = state.lastExpandedPage.coerceIn(0, 3),
+            initialPage = if (state.music.isPlaying) 0 else state.lastExpandedPage.coerceIn(0, 3),
             pageCount = { 4 }
         )
         val coroutineScope = rememberCoroutineScope()
         val activeTab = pagerState.currentPage
         val view = LocalView.current
+        var isAddingTodo by remember { mutableStateOf(false) }
+        var newTodoText by remember { mutableStateOf("") }
 
         LaunchedEffect(pagerState.currentPage) {
             IslandRepository.setLastExpandedPage(pagerState.currentPage, context)
+            if (pagerState.currentPage != 2 && isAddingTodo) {
+                isAddingTodo = false
+                onRequestKeyboardFocus?.invoke(false)
+            }
         }
 
         Column(
@@ -499,7 +505,7 @@ private fun IdleModuleContent(state: IslandUiState) {
                 .padding(top = 8.dp, bottom = 6.dp, start = 8.dp, end = 8.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            // Header Bar
+            // Header Bar Minimalis & Elegan (Tanpa tulisan EVE, Tanpa tombol silang ✕)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -510,10 +516,10 @@ private fun IdleModuleContent(state: IslandUiState) {
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     val headerTitle = when (activeTab) {
-                        0 -> "EVE · PEMUTAR MUSIK"
-                        1 -> "PRAYER · ${state.prayer.cityName.uppercase()}"
-                        2 -> "CATATAN & PENGINGAT"
-                        else -> "STOPWATCH DIGITAL"
+                        0 -> "Musik"
+                        1 -> "Jadwal Sholat"
+                        2 -> "Catatan"
+                        else -> "Stopwatch"
                     }
                     val headerColor = when (activeTab) {
                         0 -> EveCyanGlow
@@ -521,29 +527,53 @@ private fun IdleModuleContent(state: IslandUiState) {
                         2 -> WallESolarAmber
                         else -> DirectivePlantGreen
                     }
+                    val headerSubtitle = when (activeTab) {
+                        0 -> if (state.music.isPlaying) "Sedang Diputar" else "Standby"
+                        1 -> state.prayer.cityName
+                        2 -> "${state.todoList.count { it.isDone }}/${state.todoList.size} selesai"
+                        else -> if (state.stopwatch.isRunning) "Berjalan" else "Siap"
+                    }
                     Box(
                         modifier = Modifier
-                            .size(7.dp)
+                            .size(6.dp)
                             .clip(CircleShape)
                             .background(headerColor)
                     )
                     Text(
                         text = headerTitle,
-                        color = headerColor,
-                        fontSize = 10.5.sp,
-                        fontWeight = FontWeight.Black,
-                        letterSpacing = 0.5.sp
+                        color = Color.White,
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        letterSpacing = 0.3.sp
+                    )
+                    Text(
+                        text = "· $headerSubtitle",
+                        color = Color.White.copy(alpha = 0.45f),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Normal
                     )
                 }
 
-                Spacer(modifier = Modifier.width((state.calibration.cameraHoleSizeDp + 6).dp))
-
-                PillActionButton(
-                    text = "✕",
-                    bg = Color.White.copy(alpha = 0.12f),
-                    fg = Color.White
-                ) {
-                    IslandRepository.setExpanded(false)
+                if (activeTab == 2) {
+                    // Tombol Tambah Catatan Minimalis di Kanan Header
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color.White.copy(alpha = 0.10f))
+                            .clickable {
+                                isAddingTodo = !isAddingTodo
+                                onRequestKeyboardFocus?.invoke(isAddingTodo)
+                            }
+                            .padding(horizontal = 8.dp, vertical = 3.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = if (isAddingTodo) "Batal" else "+ Tambah",
+                            color = if (isAddingTodo) WallESolarAmber else Color.White,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
                 }
             }
 
@@ -788,7 +818,7 @@ private fun IdleModuleContent(state: IslandUiState) {
                         }
                     }
                     2 -> {
-                        // KARTU 2: Catatan Kecil (To-Do Checklist yang dapat dicentang & discroll ke bawah)
+                        // KARTU 2: Catatan Minimalis (Checklist dengan Tambah & Hapus)
                         val todoScrollState = rememberScrollState()
                         Column(
                             modifier = Modifier
@@ -796,56 +826,142 @@ private fun IdleModuleContent(state: IslandUiState) {
                                 .verticalScroll(todoScrollState),
                             verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
+                            if (isAddingTodo) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(Color.White.copy(alpha = 0.08f))
+                                        .border(1.dp, WallESolarAmber.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    BasicTextField(
+                                        value = newTodoText,
+                                        onValueChange = { newTodoText = it },
+                                        modifier = Modifier.weight(1f),
+                                        singleLine = true,
+                                        textStyle = TextStyle(
+                                            color = Color.White,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Medium
+                                        ),
+                                        cursorBrush = SolidColor(WallESolarAmber),
+                                        decorationBox = { innerTextField ->
+                                            if (newTodoText.isEmpty()) {
+                                                Text(
+                                                    text = "Tulis catatan baru...",
+                                                    color = Color.White.copy(alpha = 0.4f),
+                                                    fontSize = 11.sp
+                                                )
+                                            }
+                                            innerTextField()
+                                        }
+                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .size(22.dp)
+                                            .clip(CircleShape)
+                                            .background(if (newTodoText.isNotBlank()) WallESolarAmber else Color.White.copy(alpha = 0.12f))
+                                            .clickable {
+                                                if (newTodoText.isNotBlank()) {
+                                                    IslandRepository.addTodoItem(newTodoText)
+                                                    newTodoText = ""
+                                                    isAddingTodo = false
+                                                    onRequestKeyboardFocus?.invoke(false)
+                                                }
+                                            },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = "✓",
+                                            color = if (newTodoText.isNotBlank()) PitchBlack else Color.White.copy(alpha = 0.4f),
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+
                             state.todoList.forEach { item ->
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .clip(RoundedCornerShape(8.dp))
-                                        .clickable {
-                                            try {
-                                                view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-                                            } catch (_: Exception) {}
-                                            IslandRepository.toggleTodoItem(item.id)
-                                        }
                                         .padding(horizontal = 4.dp, vertical = 2.dp),
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
-                                    // Checkbox Squircle
-                                    Box(
+                                    Row(
                                         modifier = Modifier
-                                            .size(16.dp)
-                                            .clip(RoundedCornerShape(4.dp))
-                                            .background(
-                                                if (item.isDone) DirectivePlantGreen else Color.White.copy(alpha = 0.12f)
-                                            )
-                                            .border(
-                                                1.dp,
-                                                if (item.isDone) DirectivePlantGreen else Color.White.copy(alpha = 0.25f),
-                                                RoundedCornerShape(4.dp)
-                                            ),
-                                        contentAlignment = Alignment.Center
+                                            .weight(1f)
+                                            .clickable {
+                                                try {
+                                                    view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                                                } catch (_: Exception) {}
+                                                IslandRepository.toggleTodoItem(item.id)
+                                            },
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
-                                        if (item.isDone) {
-                                            Text(
-                                                text = "✓",
-                                                color = PitchBlack,
-                                                fontSize = 10.sp,
-                                                fontWeight = FontWeight.Black
-                                            )
+                                        // Checkbox Squircle
+                                        Box(
+                                            modifier = Modifier
+                                                .size(16.dp)
+                                                .clip(RoundedCornerShape(4.dp))
+                                                .background(
+                                                    if (item.isDone) DirectivePlantGreen else Color.White.copy(alpha = 0.12f)
+                                                )
+                                                .border(
+                                                    1.dp,
+                                                    if (item.isDone) DirectivePlantGreen else Color.White.copy(alpha = 0.25f),
+                                                    RoundedCornerShape(4.dp)
+                                                ),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            if (item.isDone) {
+                                                Text(
+                                                    text = "✓",
+                                                    color = PitchBlack,
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.Black
+                                                )
+                                            }
                                         }
+
+                                        // Teks Tugas
+                                        Text(
+                                            text = item.text,
+                                            color = if (item.isDone) Color(0xFF64748B) else Color.White,
+                                            fontSize = 10.5.sp,
+                                            fontWeight = if (item.isDone) FontWeight.Normal else FontWeight.Medium,
+                                            textDecoration = if (item.isDone) TextDecoration.LineThrough else null,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
                                     }
 
-                                    // Teks Tugas
-                                    Text(
-                                        text = item.text,
-                                        color = if (item.isDone) Color(0xFF64748B) else Color.White,
-                                        fontSize = 10.5.sp,
-                                        fontWeight = if (item.isDone) FontWeight.Normal else FontWeight.Medium,
-                                        textDecoration = if (item.isDone) TextDecoration.LineThrough else null,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
+                                    // Tombol Hapus (Ikon Silang Halus di Kanan)
+                                    Box(
+                                        modifier = Modifier
+                                            .size(20.dp)
+                                            .clip(CircleShape)
+                                            .clickable {
+                                                try {
+                                                    view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                                                } catch (_: Exception) {}
+                                                IslandRepository.deleteTodoItem(item.id)
+                                            },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = "✕",
+                                            color = Color.White.copy(alpha = 0.35f),
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
                                 }
                             }
                         }
