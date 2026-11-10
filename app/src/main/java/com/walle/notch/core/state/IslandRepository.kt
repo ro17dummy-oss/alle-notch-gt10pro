@@ -16,6 +16,7 @@ import com.walle.notch.core.model.StopwatchState
 import com.walle.notch.core.model.TodoItem
 import java.util.Calendar
 import java.util.TimeZone
+import kotlin.random.Random
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -229,12 +230,30 @@ object IslandRepository {
     fun restartEveIdleCountdown() {
         eveWakeJob?.cancel()
         eveIdleCycleJob?.cancel()
-        _uiState.update { it.copy(eveIdlePhase = EveIdlePhase.AWAKE_BLINK) }
+
+        // Detik 0 s/d 4: Wajah awal santai (Acak antara HAPPY ^_^ atau NORMAL O_O)
+        val initialMood = if (Random.nextBoolean()) EveMood.HAPPY else EveMood.NORMAL
+        _uiState.update { it.copy(eveIdlePhase = EveIdlePhase.AWAKE_BLINK, eveMood = initialMood) }
 
         eveIdleCycleJob = repoScope.launch {
-            delay(10_000L) // 10 detik penuh
+            // Berkedip santai selama 4 detik
+            delay(4_000L)
+
+            // Detik 4 s/d 5.6: Kejutan micro-expression spontan (WINK ;) / LOVE <3 / PLANT 🌱)
+            val surprises = listOf(EveMood.WINK, EveMood.LOVE, EveMood.PLANT)
+            val chosen = surprises[Random.nextInt(surprises.size)]
+            _uiState.update { it.copy(eveMood = chosen) }
+            delay(1_600L)
+
+            // Detik 5.6 s/d 10: Kembali tersenyum ramah (HAPPY ^_^)
+            _uiState.update { it.copy(eveMood = EveMood.HAPPY) }
+            delay(4_400L)
+
+            // Detik 10 s/d 12.2: Melirik kiri-kanan realistis sebelum tidur
             _uiState.update { it.copy(eveIdlePhase = EveIdlePhase.PRE_SLEEP_LOOK) }
-            delay(2_200L) // Durasi lirik kiri-kanan
+            delay(2_200L)
+
+            // Detik 12.2+: Tidur lelap dengan breathing glow + zZZ melayang
             _uiState.update { it.copy(eveIdlePhase = EveIdlePhase.SLEEPING_ZZZ) }
         }
     }

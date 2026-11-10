@@ -1147,6 +1147,7 @@ private fun IdleModuleContent(
             ) {
                 EveStandbyEyeRenderer(
                     phase = state.eveIdlePhase,
+                    mood = state.eveMood,
                     blinkScaleY = if (state.eveIdlePhase == EveIdlePhase.PRE_SLEEP_LOOK) drowsy.value else eyeScaleY,
                     breathingAlpha = breathingAlpha,
                     isLeft = true
@@ -1168,6 +1169,7 @@ private fun IdleModuleContent(
                 Spacer(modifier = Modifier.width(6.dp))
                 EveStandbyEyeRenderer(
                     phase = state.eveIdlePhase,
+                    mood = state.eveMood,
                     blinkScaleY = if (state.eveIdlePhase == EveIdlePhase.PRE_SLEEP_LOOK) drowsy.value else eyeScaleY,
                     breathingAlpha = breathingAlpha,
                     isLeft = false
@@ -1319,6 +1321,7 @@ private fun CelestialPrayerArc(
 @Composable
 private fun EveStandbyEyeRenderer(
     phase: EveIdlePhase,
+    mood: EveMood,
     blinkScaleY: Float,
     breathingAlpha: Float,
     isLeft: Boolean
@@ -1391,7 +1394,7 @@ private fun EveStandbyEyeRenderer(
                 drawOval(color = EveCyanGlow)
             }
         }
-        EveIdlePhase.AWAKE_BLINK, EveIdlePhase.PRE_SLEEP_LOOK, EveIdlePhase.TOUCH_BLACKOUT -> {
+        EveIdlePhase.PRE_SLEEP_LOOK, EveIdlePhase.TOUCH_BLACKOUT -> {
             // Standby Biasa: Kapsul LED ramping 9x14dp + kedip santai
             Canvas(
                 modifier = Modifier
@@ -1405,6 +1408,16 @@ private fun EveStandbyEyeRenderer(
                 )
                 drawOval(color = EveCyanGlow)
             }
+        }
+        EveIdlePhase.AWAKE_BLINK -> {
+            // Detik 0-10: Micro-expression hidup & organik (HAPPY, WINK, LOVE, PLANT, NORMAL)
+            CuteEyeRenderer(
+                mood = mood,
+                isLeft = isLeft,
+                scaleY = blinkScaleY,
+                heartScale = 1f,
+                sizeScale = 0.88f
+            )
         }
     }
 }
