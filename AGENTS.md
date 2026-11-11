@@ -44,3 +44,10 @@ Behavioral guidelines to reduce common LLM coding mistakes, derived from Andrej 
   ```
 - Perform self-testing and verification before handing off to the user.
 - In this project (Wall-E Notch), verify logic with local simulation scripts and confirm remote builds succeed via GitHub Actions.
+
+---
+
+## 5. Knowledge Graph & Architecture Mapping (Graphify)
+**Always maintain and query the codebase graph.**
+- Always consult `graphify-out/` (`graphify query`, `graph.json`, `GRAPH_REPORT.md`) to trace call flows, data dependencies, and god nodes before making architectural changes.
+- After every significant feature addition or refactoring, automatically run `graphify update .` to keep `graph.json`, `GRAPH_REPORT.md`, and the visual map `graph.html` 100% synchronized with the latest codebase.
