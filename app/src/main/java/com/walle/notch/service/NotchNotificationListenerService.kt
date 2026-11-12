@@ -11,8 +11,10 @@ import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
 import android.os.Bundle
+import android.os.SystemClock
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
+import android.view.KeyEvent
 import com.walle.notch.core.model.IslandMode
 import com.walle.notch.core.model.NotificationPayload
 import com.walle.notch.core.state.IslandRepository
@@ -34,6 +36,12 @@ class NotchNotificationListenerService : NotificationListenerService() {
         override fun onMetadataChanged(metadata: MediaMetadata?) {
             syncMediaControllerState()
         }
+
+        override fun onSessionDestroyed() {
+            activeController?.unregisterCallback(this)
+            activeController = null
+            refreshActiveMediaControllers()
+        }
     }
 
     override fun onListenerConnected() {
@@ -46,6 +54,10 @@ class NotchNotificationListenerService : NotificationListenerService() {
     override fun onListenerDisconnected() {
         super.onListenerDisconnected()
         IslandRepository.setNotificationListenerConnected(false)
+        IslandRepository.onMediaPlayPause = null
+        IslandRepository.onMediaNext = null
+        IslandRepository.onMediaPrevious = null
+        IslandRepository.onMediaSeekTo = null
         try {
             mediaSessionManager?.removeOnActiveSessionsChangedListener(sessionListener)
         } catch (_: Exception) {
@@ -64,6 +76,18 @@ class NotchNotificationListenerService : NotificationListenerService() {
         }
     }
 
+    private fun refreshActiveMediaControllers(): MediaController? {
+        try {
+            val mgr = mediaSessionManager ?: (getSystemService(Context.MEDIA_SESSION_SERVICE) as? MediaSessionManager)?.also {
+                mediaSessionManager = it
+            } ?: return activeController
+            val componentName = ComponentName(this, NotchNotificationListenerService::class.java)
+            bindToMediaControllers(mgr.getActiveSessions(componentName))
+        } catch (_: SecurityException) {
+        }
+        return activeController
+    }
+
     private fun bindToMediaControllers(controllers: List<MediaController>?) {
         activeController?.unregisterCallback(mediaCallback)
         val chosen = controllers?.firstOrNull {
@@ -76,7 +100,18 @@ class NotchNotificationListenerService : NotificationListenerService() {
     }
 
     private fun syncMediaControllerState() {
-        val controller = activeController ?: return
+        val outputName = IslandRepository.resolveAudioOutputName(this)
+        val controller = activeController
+        if (controller == null) {
+            IslandRepository.updateMusic { prev ->
+                prev.copy(
+                    isPlaying = false,
+                    packageName = "",
+                    outputDeviceName = outputName
+                )
+            }
+            return
+        }
         val metadata = controller.metadata
         val playback = controller.playbackState
 
@@ -87,7 +122,14 @@ class NotchNotificationListenerService : NotificationListenerService() {
             ?.takeIf { it.isNotBlank() } ?: "Wall-E Archive Tape"
         val duration = metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION)
             ?.takeIf { it > 0L } ?: 194_000L
-        val position = playback?.position?.coerceAtLeast(0L) ?: 0L
+        val rawPos = playback?.position?.coerceAtLeast(0L) ?: 0L
+        val elapsedSinceUpdate = if (isPlaying && playback != null && playback.lastPositionUpdateTime > 0L) {
+            val speed = if (playback.playbackSpeed > 0f) playback.playbackSpeed else 1f
+            ((SystemClock.elapsedRealtime() - playback.lastPositionUpdateTime) * speed).toLong().coerceAtLeast(0L)
+        } else {
+            0L
+        }
+        val position = (rawPos + elapsedSinceUpdate).coerceAtMost(duration)
         val art: Bitmap? = metadata?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
             ?: metadata?.getBitmap(MediaMetadata.METADATA_KEY_ART)
 
@@ -99,14 +141,15 @@ class NotchNotificationListenerService : NotificationListenerService() {
                 packageName = controller.packageName ?: "",
                 albumArt = art,
                 durationMs = duration,
-                positionMs = position
+                positionMs = position,
+                outputDeviceName = outputName
             )
         }
     }
 
     private fun wireMediaCallbacks() {
         IslandRepository.onMediaPlayPause = {
-            val ctrl = activeController
+            val ctrl = activeController ?: refreshActiveMediaControllers()
             if (ctrl != null) {
                 val pb = ctrl.playbackState?.state
                 if (pb == PlaybackState.STATE_PLAYING) {
@@ -115,34 +158,28 @@ class NotchNotificationListenerService : NotificationListenerService() {
                     ctrl.transportControls.play()
                 }
             } else {
-                IslandRepository.updateMusic { it.copy(isPlaying = !it.isPlaying) }
+                IslandRepository.dispatchMediaKey(this, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)
             }
         }
         IslandRepository.onMediaNext = {
-            val ctrl = activeController
+            val ctrl = activeController ?: refreshActiveMediaControllers()
             if (ctrl != null) {
                 ctrl.transportControls.skipToNext()
             } else {
-                IslandRepository.updateMusic {
-                    it.copy(
-                        title = if (it.title.startsWith("Put On")) "Define Dancing (EVE Flight)" else "Put On Your Sunday Clothes",
-                        artist = if (it.title.startsWith("Put On")) "Thomas Newman" else "Wall-E Archive Tape",
-                        positionMs = 0L,
-                        isPlaying = true
-                    )
-                }
+                IslandRepository.dispatchMediaKey(this, KeyEvent.KEYCODE_MEDIA_NEXT)
             }
         }
         IslandRepository.onMediaPrevious = {
-            val ctrl = activeController
+            val ctrl = activeController ?: refreshActiveMediaControllers()
             if (ctrl != null) {
                 ctrl.transportControls.skipToPrevious()
             } else {
-                IslandRepository.updateMusic { it.copy(positionMs = 0L, isPlaying = true) }
+                IslandRepository.dispatchMediaKey(this, KeyEvent.KEYCODE_MEDIA_PREVIOUS)
             }
         }
         IslandRepository.onMediaSeekTo = { posMs ->
-            activeController?.transportControls?.seekTo(posMs)
+            val ctrl = activeController ?: refreshActiveMediaControllers()
+            ctrl?.transportControls?.seekTo(posMs)
             IslandRepository.updateMusic { it.copy(positionMs = posMs) }
         }
     }

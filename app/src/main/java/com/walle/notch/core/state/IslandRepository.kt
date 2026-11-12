@@ -6,12 +6,16 @@ import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.media.AudioAttributes
+import android.media.AudioDeviceInfo
+import android.media.AudioManager
 import android.media.Ringtone
 import android.media.RingtoneManager
 import android.os.Build
+import android.os.SystemClock
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
+import android.view.KeyEvent
 import com.walle.notch.core.model.BatteryTelemetry
 import com.walle.notch.core.model.CallTimerState
 import com.walle.notch.core.model.EveIdlePhase
@@ -70,6 +74,83 @@ object IslandRepository {
     var onMediaNext: (() -> Unit)? = null
     var onMediaPrevious: (() -> Unit)? = null
     var onMediaSeekTo: ((Long) -> Unit)? = null
+
+    fun mediaPlayPause(context: Context) {
+        val cb = onMediaPlayPause
+        if (cb != null) {
+            cb.invoke()
+        } else {
+            dispatchMediaKey(context, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)
+        }
+    }
+
+    fun mediaNext(context: Context) {
+        val cb = onMediaNext
+        if (cb != null) {
+            cb.invoke()
+        } else {
+            dispatchMediaKey(context, KeyEvent.KEYCODE_MEDIA_NEXT)
+        }
+    }
+
+    fun mediaPrevious(context: Context) {
+        val cb = onMediaPrevious
+        if (cb != null) {
+            cb.invoke()
+        } else {
+            dispatchMediaKey(context, KeyEvent.KEYCODE_MEDIA_PREVIOUS)
+        }
+    }
+
+    fun mediaSeekTo(positionMs: Long) {
+        val clamped = positionMs.coerceAtLeast(0L)
+        onMediaSeekTo?.invoke(clamped) ?: updateMusic { it.copy(positionMs = clamped) }
+    }
+
+    fun dispatchMediaKey(context: Context, keyCode: Int) {
+        val am = context.applicationContext.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return
+        val now = SystemClock.uptimeMillis()
+        am.dispatchMediaKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_DOWN, keyCode, 0))
+        am.dispatchMediaKeyEvent(KeyEvent(now, now + 10L, KeyEvent.ACTION_UP, keyCode, 0))
+    }
+
+    fun openMusicApp(context: Context) {
+        val appCtx = context.applicationContext
+        val pm = appCtx.packageManager
+        val pkg = _uiState.value.music.packageName
+        val launchIntent = if (pkg.isNotBlank()) {
+            pm.getLaunchIntentForPackage(pkg)
+        } else {
+            null
+        } ?: Intent.makeMainSelectorActivity(Intent.ACTION_MAIN, Intent.CATEGORY_APP_MUSIC)
+
+        launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        try {
+            appCtx.startActivity(launchIntent)
+            setExpanded(false)
+        } catch (_: Exception) {
+        }
+    }
+
+    fun resolveAudioOutputName(context: Context): String {
+        val am = context.applicationContext.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return "Speaker"
+        val devices = am.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
+        val btDevice = devices.firstOrNull {
+            it.type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP ||
+                it.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO ||
+                (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && it.type == AudioDeviceInfo.TYPE_BLE_HEADSET)
+        }
+        if (btDevice != null) {
+            val name = btDevice.productName?.toString()?.trim()
+            return if (!name.isNullOrBlank()) name else "Bluetooth"
+        }
+        val wired = devices.firstOrNull {
+            it.type == AudioDeviceInfo.TYPE_WIRED_HEADSET ||
+                it.type == AudioDeviceInfo.TYPE_WIRED_HEADPHONES ||
+                it.type == AudioDeviceInfo.TYPE_USB_HEADSET
+        }
+        return if (wired != null) "Headset" else "Speaker"
+    }
 
     fun loadCalibration(context: Context) {
         appContext = context.applicationContext

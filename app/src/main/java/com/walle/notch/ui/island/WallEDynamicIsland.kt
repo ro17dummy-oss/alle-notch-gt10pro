@@ -608,12 +608,15 @@ private fun IdleModuleContent(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            // Album Art Squircle di Kiri
+                            // Album Art Squircle di Kiri (Tap untuk buka aplikasi musik)
                             Box(
                                 modifier = Modifier
                                     .size(54.dp)
                                     .clip(RoundedCornerShape(12.dp))
-                                    .background(Color(0xFF1E222A)),
+                                    .background(Color(0xFF1E222A))
+                                    .clickable {
+                                        IslandRepository.openMusicApp(context)
+                                    },
                                 contentAlignment = Alignment.Center
                             ) {
                                 if (state.music.albumArt != null) {
@@ -624,10 +627,17 @@ private fun IdleModuleContent(
                                         contentScale = ContentScale.Crop
                                     )
                                 } else {
-                                    Text(
-                                        text = "🎵",
-                                        fontSize = 22.sp
-                                    )
+                                    Canvas(modifier = Modifier.size(22.dp)) {
+                                        drawCircle(
+                                            color = EveCyanGlow.copy(alpha = 0.8f),
+                                            radius = size.minDimension * 0.44f,
+                                            style = Stroke(width = 2.dp.toPx())
+                                        )
+                                        drawCircle(
+                                            color = WallESolarAmber,
+                                            radius = size.minDimension * 0.14f
+                                        )
+                                    }
                                 }
                             }
 
@@ -638,8 +648,12 @@ private fun IdleModuleContent(
                                     .fillMaxHeight(),
                                 verticalArrangement = Arrangement.SpaceBetween
                             ) {
-                                // Judul & Artis
-                                Column {
+                                // Judul & Artis (Tap untuk buka aplikasi musik)
+                                Column(
+                                    modifier = Modifier.clickable {
+                                        IslandRepository.openMusicApp(context)
+                                    }
+                                ) {
                                     Text(
                                         text = if (state.music.title.isNotBlank()) state.music.title else "Not Playing",
                                         color = Color.White,
@@ -649,7 +663,7 @@ private fun IdleModuleContent(
                                         overflow = TextOverflow.Ellipsis
                                     )
                                     Text(
-                                        text = if (state.music.artist.isNotBlank()) state.music.artist else "EVE Audio Track",
+                                        text = if (state.music.artist.isNotBlank()) state.music.artist else "Tap cover untuk buka musik",
                                         color = Color(0xFF94A3B8),
                                         fontSize = 9.5.sp,
                                         maxLines = 1,
@@ -657,7 +671,7 @@ private fun IdleModuleContent(
                                     )
                                 }
 
-                                // Seekbar Progress Line: 00:00 --- [Bar] --- -03:45
+                                // Seekbar Progress Line (Tap untuk loncat durasi): 00:00 --- [Bar] --- -03:45
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     verticalAlignment = Alignment.CenterVertically,
@@ -672,19 +686,34 @@ private fun IdleModuleContent(
                                     Box(
                                         modifier = Modifier
                                             .weight(1f)
-                                            .height(3.dp)
-                                            .clip(CircleShape)
-                                            .background(Color.White.copy(alpha = 0.15f))
+                                            .height(10.dp)
+                                            .pointerInput(state.music.durationMs) {
+                                                detectTapGestures { offset ->
+                                                    if (size.width > 0 && state.music.durationMs > 0L) {
+                                                        val ratio = (offset.x / size.width.toFloat()).coerceIn(0f, 1f)
+                                                        IslandRepository.mediaSeekTo((state.music.durationMs * ratio).toLong())
+                                                    }
+                                                }
+                                            },
+                                        contentAlignment = Alignment.Center
                                     ) {
-                                        val progressFraction = if (state.music.durationMs > 0) {
-                                            (state.music.positionMs.toFloat() / state.music.durationMs).coerceIn(0f, 1f)
-                                        } else 0.35f
                                         Box(
                                             modifier = Modifier
-                                                .fillMaxHeight()
-                                                .fillMaxWidth(progressFraction)
-                                                .background(Color.White)
-                                        )
+                                                .fillMaxWidth()
+                                                .height(3.dp)
+                                                .clip(CircleShape)
+                                                .background(Color.White.copy(alpha = 0.15f))
+                                        ) {
+                                            val progressFraction = if (state.music.durationMs > 0) {
+                                                (state.music.positionMs.toFloat() / state.music.durationMs).coerceIn(0f, 1f)
+                                            } else 0.35f
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxHeight()
+                                                    .fillMaxWidth(progressFraction)
+                                                    .background(Color.White)
+                                            )
+                                        }
                                     }
                                     val remainingMs = (state.music.durationMs - state.music.positionMs).coerceAtLeast(0L)
                                     Text(
@@ -695,13 +724,13 @@ private fun IdleModuleContent(
                                     )
                                 }
 
-                                // Kontrol Bawah: Vector Canvas Media Controls (⏮, ▶/⏸, ⏭) & 🔊
+                                // Kontrol Bawah: Vector Canvas Media Controls (⏮, ▶/⏸, ⏭) & Audio Output
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
-                                    Spacer(modifier = Modifier.width(16.dp)) // Penyeimbang kiri
+                                    Spacer(modifier = Modifier.width(36.dp)) // Penyeimbang kiri
 
                                     // Tombol Media Vektor Canvas Tengah (Jaminan 100% muncul & tajam di semua device)
                                     Row(
@@ -715,7 +744,7 @@ private fun IdleModuleContent(
                                             modifier = Modifier.size(26.dp),
                                             iconSize = 10.dp
                                         ) {
-                                            IslandRepository.onMediaPrevious?.invoke()
+                                            IslandRepository.mediaPrevious(context)
                                         }
 
                                         MediaIconButton(
@@ -725,7 +754,7 @@ private fun IdleModuleContent(
                                             modifier = Modifier.size(28.dp),
                                             iconSize = 11.dp
                                         ) {
-                                            IslandRepository.onMediaPlayPause?.invoke()
+                                            IslandRepository.mediaPlayPause(context)
                                         }
 
                                         MediaIconButton(
@@ -735,14 +764,16 @@ private fun IdleModuleContent(
                                             modifier = Modifier.size(26.dp),
                                             iconSize = 10.dp
                                         ) {
-                                            IslandRepository.onMediaNext?.invoke()
+                                            IslandRepository.mediaNext(context)
                                         }
                                     }
 
-                                    // Ikon Speaker Kanan
                                     Text(
-                                        text = "🔊",
-                                        fontSize = 12.sp
+                                        text = state.music.outputDeviceName.take(8),
+                                        color = EveCyanGlow.copy(alpha = 0.75f),
+                                        fontSize = 8.5.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        maxLines = 1
                                     )
                                 }
                             }
@@ -1597,6 +1628,7 @@ private fun CuteEyeRenderer(
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun MusicModuleContent(state: IslandUiState) {
+    val context = LocalContext.current
     val music = state.music
     val infinite = rememberInfiniteTransition(label = "eqWave")
     val bar1 by infinite.animateFloat(
@@ -1788,7 +1820,11 @@ private fun MusicModuleContent(state: IslandUiState) {
 
             // 2. Song Info Row (Berada di bawah lubang kamera fisik, lebar penuh & tidak tertutup kamera!)
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        IslandRepository.openMusicApp(context)
+                    },
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
@@ -1863,19 +1899,34 @@ private fun MusicModuleContent(state: IslandUiState) {
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .height(4.5.dp)
-                        .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.14f))
+                        .height(12.dp)
+                        .pointerInput(music.durationMs) {
+                            detectTapGestures { offset ->
+                                if (size.width > 0 && music.durationMs > 0L) {
+                                    val ratio = (offset.x / size.width.toFloat()).coerceIn(0f, 1f)
+                                    IslandRepository.mediaSeekTo((music.durationMs * ratio).toLong())
+                                }
+                            }
+                        },
+                    contentAlignment = Alignment.Center
                 ) {
                     Box(
                         modifier = Modifier
-                            .fillMaxWidth(progress)
-                            .fillMaxHeight()
+                            .fillMaxWidth()
+                            .height(4.5.dp)
                             .clip(CircleShape)
-                            .background(
-                                Brush.horizontalGradient(listOf(EveCyanGlow, WallESolarAmber))
-                            )
-                    )
+                            .background(Color.White.copy(alpha = 0.14f))
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(progress)
+                                .fillMaxHeight()
+                                .clip(CircleShape)
+                                .background(
+                                    Brush.horizontalGradient(listOf(EveCyanGlow, WallESolarAmber))
+                                )
+                        )
+                    }
                 }
                 val remainingSec = ((music.durationMs - music.positionMs).coerceAtLeast(0L) / 1000L).toInt()
                 Text(
@@ -1910,21 +1961,21 @@ private fun MusicModuleContent(state: IslandUiState) {
                         bg = Color.White.copy(alpha = 0.12f),
                         fg = Color.White
                     ) {
-                        IslandRepository.onMediaPrevious?.invoke()
+                        IslandRepository.mediaPrevious(context)
                     }
                     MediaIconButton(
                         iconType = if (music.isPlaying) MediaIconType.PAUSE else MediaIconType.PLAY,
                         bg = EveCyanGlow,
                         fg = PitchBlack
                     ) {
-                        IslandRepository.onMediaPlayPause?.invoke()
+                        IslandRepository.mediaPlayPause(context)
                     }
                     MediaIconButton(
                         iconType = MediaIconType.NEXT,
                         bg = Color.White.copy(alpha = 0.12f),
                         fg = Color.White
                     ) {
-                        IslandRepository.onMediaNext?.invoke()
+                        IslandRepository.mediaNext(context)
                     }
                 }
             }
