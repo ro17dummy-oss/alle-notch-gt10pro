@@ -52,6 +52,7 @@ class NotchWindowOverlayService : Service() {
     override fun onCreate() {
         super.onCreate()
         IslandRepository.loadCalibration(applicationContext)
+        IslandRepository.schedulePrayerAlarms(applicationContext)
         val isLandscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
         IslandRepository.setLandscapeHorizontal(isLandscape)
 

@@ -1,6 +1,7 @@
 package com.walle.notch.service
 
 import android.view.WindowManager
+import com.walle.notch.core.model.IslandMode
 import com.walle.notch.core.state.IslandRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -45,10 +46,10 @@ class OverlayGeometryController(
         job?.cancel()
         job = scope.launch {
             IslandRepository.uiState
-                .map { it.isExpanded to it.isAppPeek }
+                .map { (it.isExpanded || it.mode == IslandMode.PRAYER_ALERT) to it.isAppPeek }
                 .distinctUntilChanged()
-                .collectLatest { (expanded, peek) ->
-                    if (expanded) {
+                .collectLatest { (needLarge, peek) ->
+                    if (needLarge) {
                         touchless = false
                         large = true
                         update()

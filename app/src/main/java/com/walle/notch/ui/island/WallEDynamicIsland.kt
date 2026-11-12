@@ -188,7 +188,7 @@ private fun NotchBody(
     // masuk peek lebih cepat (~65% durasi keluar), keluar peek tanpa membal, expand critically damped (850f) tanpa goyang.
     val morphSpec = when {
         isAppPeek -> spring<Dp>(dampingRatio = 1f, stiffness = 1300f)
-        state.isExpanded -> spring<Dp>(dampingRatio = 1f, stiffness = 850f)
+        state.isExpanded || state.mode == IslandMode.PRAYER_ALERT -> spring<Dp>(dampingRatio = 1f, stiffness = 850f)
         else -> spring<Dp>(dampingRatio = 1f, stiffness = 650f)
     }
 
@@ -199,6 +199,7 @@ private fun NotchBody(
     )
     val targetBottomRadius = when {
         isAppPeek -> 3.dp
+        state.mode == IslandMode.PRAYER_ALERT -> 24.dp
         state.isExpanded -> 28.dp
         else -> (cal.cornerWidthDp * 0.64f).dp
     }
@@ -206,12 +207,14 @@ private fun NotchBody(
     // Ukuran "normal" (tanpa peek): dipakai untuk layout isi agar isi tidak terjepit saat notch tumbuh
     val normalWidth: Dp = when {
         isHiddenInCamera -> cal.cameraHoleSizeDp.dp
+        state.mode == IslandMode.PRAYER_ALERT -> 304.dp
         state.isExpanded -> when (state.mode) {
             IslandMode.IDLE -> 318.dp          // Nusa Multi-Card Interactive Dashboard
             IslandMode.MUSIC -> 318.dp         // Nusa-style sleek music player
             IslandMode.SOLAR_CHARGE -> 296.dp  // Sleek solar charge visor
             IslandMode.NOTIFICATION -> 320.dp  // Clean quick reply card
             IslandMode.CALL_TIMER -> 300.dp
+            IslandMode.PRAYER_ALERT -> 304.dp
         }
         else -> when (state.mode) {
             IslandMode.IDLE -> cal.idleWidthDp.dp
@@ -219,17 +222,20 @@ private fun NotchBody(
             IslandMode.SOLAR_CHARGE -> 232.dp
             IslandMode.NOTIFICATION -> cal.idleWidthDp.dp // Tetap di ukuran biasa 202dp!
             IslandMode.CALL_TIMER -> 244.dp
+            IslandMode.PRAYER_ALERT -> 304.dp
         }
     }
 
     val normalHeight: Dp = when {
         isHiddenInCamera -> cal.cameraHoleSizeDp.dp
+        state.mode == IslandMode.PRAYER_ALERT -> 86.dp
         state.isExpanded -> when (state.mode) {
             IslandMode.IDLE -> 144.dp          // 4-Card Dashboard (Musik, Sholat, Catatan, Stopwatch)
             IslandMode.MUSIC -> 144.dp         // Konsisten 144dp saat expand
             IslandMode.SOLAR_CHARGE -> 114.dp
             IslandMode.NOTIFICATION -> 110.dp  // Tinggi pas untuk balas cepat tanpa mubazir
             IslandMode.CALL_TIMER -> 124.dp
+            IslandMode.PRAYER_ALERT -> 86.dp
         }
         else -> cal.idleHeightDp.dp
     }
@@ -256,7 +262,7 @@ private fun NotchBody(
     )
 
     // Padding isi tetap (tidak dianimasikan) karena isi di-layout pada ukuran final
-    val contentHorizontalPad = if (state.isExpanded) 24.dp else cal.cornerWidthDp.dp
+    val contentHorizontalPad = if (state.isExpanded || state.mode == IslandMode.PRAYER_ALERT) 24.dp else cal.cornerWidthDp.dp
 
     // Isi (mata EVE dll) fade-in setelah notch hampir selesai tumbuh; fade-out cepat saat mengecil
     val contentAlpha by animateFloatAsState(
@@ -298,7 +304,9 @@ private fun NotchBody(
                             try {
                                 view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                             } catch (_: Exception) {}
-                            if (state.isExpanded) {
+                            if (state.mode == IslandMode.PRAYER_ALERT) {
+                                IslandRepository.dismissPrayerAlert()
+                            } else if (state.isExpanded) {
                                 IslandRepository.setExpanded(false)
                             } else if (state.mode == IslandMode.IDLE) {
                                 // Gesture swipe up saat standby: langsung tidur instan
@@ -317,7 +325,9 @@ private fun NotchBody(
                         view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                     } catch (_: Exception) {}
 
-                    if (!state.isExpanded) {
+                    if (state.mode == IslandMode.PRAYER_ALERT) {
+                        IslandRepository.dismissPrayerAlert()
+                    } else if (!state.isExpanded) {
                         IslandRepository.setExpanded(true)
                     } else if (state.mode == IslandMode.IDLE) {
                         IslandRepository.cycleEveMood(context)
@@ -329,7 +339,9 @@ private fun NotchBody(
                     try {
                         view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
                     } catch (_: Exception) {}
-                    if (state.isExpanded) {
+                    if (state.mode == IslandMode.PRAYER_ALERT) {
+                        IslandRepository.dismissPrayerAlert()
+                    } else if (state.isExpanded) {
                         IslandRepository.setExpanded(false)
                     } else {
                         IslandRepository.cycleEveMood(context)
@@ -338,8 +350,8 @@ private fun NotchBody(
             ),
         contentAlignment = Alignment.TopCenter
     ) {
-        // Garis kontur kurva bawah halus (Bottom Squircle Rim Highlight) saat di-expand selain notif
-        if (state.isExpanded && state.mode != IslandMode.NOTIFICATION) {
+        // Garis kontur kurva bawah halus (Bottom Squircle Rim Highlight) saat di-expand selain notif, atau saat Prayer Alert
+        if ((state.isExpanded && state.mode != IslandMode.NOTIFICATION) || state.mode == IslandMode.PRAYER_ALERT) {
             Canvas(
                 modifier = Modifier.fillMaxSize()
             ) {
@@ -385,6 +397,7 @@ private fun NotchBody(
                         onFocusInput = onRequestKeyboardFocus
                     )
                     state.mode == IslandMode.CALL_TIMER -> CallTimerModuleContent(state)
+                    state.mode == IslandMode.PRAYER_ALERT -> PrayerAlertModuleContent(state)
                     else -> IdleModuleContent(state, onRequestKeyboardFocus)
                 }
             }
@@ -2726,6 +2739,190 @@ private fun CallTimerModuleContent(state: IslandUiState) {
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun PrayerAlertModuleContent(state: IslandUiState) {
+    val alert = state.prayerAlert
+    val infinite = rememberInfiniteTransition(label = "prayerAlertGlow")
+    val shimmerShift by infinite.animateFloat(
+        initialValue = -0.35f,
+        targetValue = 1.35f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1800, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "prayerShimmer"
+    )
+    val pulseAlpha by infinite.animateFloat(
+        initialValue = 0.45f,
+        targetValue = 1.0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 900, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "prayerPulse"
+    )
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(top = 7.dp, bottom = 10.dp, start = 4.dp, end = 4.dp),
+        verticalArrangement = Arrangement.SpaceBetween
+    ) {
+        // Baris Atas (Kiri & Kanan mengapit punch-hole kamera dengan presisi)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(7.dp)
+            ) {
+                MosqueSilhouetteIcon(
+                    tint = Color(0xFF38BDF8),
+                    glowAlpha = pulseAlpha
+                )
+                Text(
+                    text = alert.prayerName.ifBlank { state.prayer.nextPrayerName },
+                    color = Color.White,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            Spacer(modifier = Modifier.width((state.calibration.cameraHoleSizeDp + 6).dp))
+
+            Row(
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.End
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(5.dp)
+                        .clip(CircleShape)
+                        .background(EveCyanGlow.copy(alpha = pulseAlpha))
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = alert.prayerTime.ifBlank { state.prayer.nextPrayerTime },
+                    color = Color(0xFF38BDF8),
+                    fontSize = 13.sp,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+
+        // Baris Bawah: Subtitle Minimalis + Shimmering Glow Bar
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Waktunya Sholat · ${state.prayer.cityName}",
+                    color = Color.White.copy(alpha = 0.72f),
+                    fontSize = 10.5.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1
+                )
+                Text(
+                    text = "Tap tutup",
+                    color = Color.White.copy(alpha = 0.40f),
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Normal
+                )
+            }
+
+            Canvas(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(2.5.dp)
+                    .clip(CircleShape)
+            ) {
+                drawRect(color = Color.White.copy(alpha = 0.10f))
+                val highlightStart = (shimmerShift - 0.25f) * size.width
+                val highlightEnd = (shimmerShift + 0.25f) * size.width
+                drawRect(
+                    brush = Brush.horizontalGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            Color(0xFF38BDF8).copy(alpha = 0.65f),
+                            EveCyanGlow,
+                            WallESolarAmber.copy(alpha = 0.75f),
+                            Color.Transparent
+                        ),
+                        startX = highlightStart,
+                        endX = highlightEnd
+                    )
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MosqueSilhouetteIcon(
+    tint: Color,
+    glowAlpha: Float,
+    modifier: Modifier = Modifier
+) {
+    Canvas(modifier = modifier.size(18.dp)) {
+        val w = size.width
+        val h = size.height
+
+        // Halo lembut di belakang kubah
+        drawCircle(
+            color = tint.copy(alpha = 0.18f * glowAlpha),
+            radius = w * 0.52f,
+            center = Offset(w * 0.5f, h * 0.56f)
+        )
+
+        // Kubah masjid minimalis + dasar
+        val domePath = Path().apply {
+            moveTo(w * 0.18f, h * 0.86f)
+            lineTo(w * 0.18f, h * 0.62f)
+            lineTo(w * 0.28f, h * 0.62f)
+            cubicTo(
+                w * 0.28f, h * 0.36f,
+                w * 0.50f, h * 0.26f,
+                w * 0.50f, h * 0.20f
+            )
+            cubicTo(
+                w * 0.50f, h * 0.26f,
+                w * 0.72f, h * 0.36f,
+                w * 0.72f, h * 0.62f
+            )
+            lineTo(w * 0.82f, h * 0.62f)
+            lineTo(w * 0.82f, h * 0.86f)
+            close()
+        }
+        drawPath(path = domePath, color = tint)
+
+        // Tiang puncak / bulan sabit mini di atas kubah
+        drawLine(
+            color = WallESolarAmber.copy(alpha = 0.9f),
+            start = Offset(w * 0.50f, h * 0.20f),
+            end = Offset(w * 0.50f, h * 0.08f),
+            strokeWidth = 1.4.dp.toPx(),
+            cap = StrokeCap.Round
+        )
+        drawCircle(
+            color = WallESolarAmber,
+            radius = 1.6.dp.toPx(),
+            center = Offset(w * 0.50f, h * 0.07f)
+        )
     }
 }
 

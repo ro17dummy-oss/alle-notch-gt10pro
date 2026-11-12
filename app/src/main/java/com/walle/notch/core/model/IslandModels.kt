@@ -9,7 +9,8 @@ enum class IslandMode {
     MUSIC,
     SOLAR_CHARGE,
     NOTIFICATION,
-    CALL_TIMER
+    CALL_TIMER,
+    PRAYER_ALERT
 }
 
 enum class EveMood {
@@ -122,6 +123,11 @@ data class StopwatchState(
     val elapsedMillis: Long = 0L
 )
 
+data class PrayerAlertState(
+    val prayerName: String = "",
+    val prayerTime: String = ""
+)
+
 data class IslandUiState(
     val mode: IslandMode = IslandMode.IDLE,
     val eveMood: EveMood = EveMood.HAPPY,
@@ -147,6 +153,7 @@ data class IslandUiState(
         TodoItem(5, "Cek jadwal sholat hari ini", false)
     ),
     val stopwatch: StopwatchState = StopwatchState(),
+    val prayerAlert: PrayerAlertState = PrayerAlertState(),
     val lastExpandedPage: Int = 0,
     val isOverlayServiceRunning: Boolean = false,
     val isNotificationListenerConnected: Boolean = false,
@@ -158,7 +165,7 @@ data class IslandUiState(
             (calibration.hideWhenAppOpen && isAppOpen) ||
                 isMenuOrDrawerOpen ||
                 (calibration.hideWhenMenuScrolled && isNotificationShadeOpen)
-            ) && !isExpanded && !isNotchHidden
+            ) && !isExpanded && !isNotchHidden && mode != IslandMode.PRAYER_ALERT
 
     /** Notch disembunyikan total (0dp / GONE): hanya di Lock Screen atau layar horizontal (landscape) */
     val isNotchHidden: Boolean

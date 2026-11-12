@@ -1,7 +1,17 @@
 package com.walle.notch.core.state
 
+import android.app.AlarmManager
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
 import android.content.SharedPreferences
+import android.media.AudioAttributes
+import android.media.Ringtone
+import android.media.RingtoneManager
+import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import com.walle.notch.core.model.BatteryTelemetry
 import com.walle.notch.core.model.CallTimerState
 import com.walle.notch.core.model.EveIdlePhase
@@ -11,9 +21,11 @@ import com.walle.notch.core.model.IslandMode
 import com.walle.notch.core.model.IslandUiState
 import com.walle.notch.core.model.MusicState
 import com.walle.notch.core.model.NotificationPayload
+import com.walle.notch.core.model.PrayerAlertState
 import com.walle.notch.core.model.PrayerSchedule
 import com.walle.notch.core.model.StopwatchState
 import com.walle.notch.core.model.TodoItem
+import com.walle.notch.service.PrayerAlarmReceiver
 import java.util.Calendar
 import java.util.TimeZone
 import kotlin.random.Random
@@ -32,10 +44,21 @@ object IslandRepository {
 
     private const val PREFS_NAME = "walle_notch_gt10pro_prefs"
     private const val CALIBRATION_VERSION = 2 // v2: Fixed notch 36dp height, 202dp width, 36dp corner width
+    private const val KEY_TODO_LIST = "todoList"
+
+    private val PADANG_PRAYERS = listOf(
+        Triple("Subuh", 280, "04:40"),
+        Triple("Dzuhur", 725, "12:05"),
+        Triple("Ashar", 927, "15:27"),
+        Triple("Maghrib", 1090, "18:10"),
+        Triple("Isya", 1162, "19:22")
+    )
 
     private val repoScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var appContext: Context? = null
     private var transientBannerJob: Job? = null
+    private var prayerAlertJob: Job? = null
+    private var activePrayerRingtone: Ringtone? = null
     private var eveIdleCycleJob: Job? = null
     private var eveWakeJob: Job? = null
 
@@ -100,8 +123,16 @@ object IslandRepository {
             EveMood.HAPPY
         }
         val savedLastPage = prefs.getInt("lastExpandedPage", 0).coerceIn(0, 3)
+        val savedTodos = loadTodoList(prefs)
 
-        _uiState.update { it.copy(calibration = cal, eveMood = mood, lastExpandedPage = savedLastPage) }
+        _uiState.update { state ->
+            state.copy(
+                calibration = cal,
+                eveMood = mood,
+                lastExpandedPage = savedLastPage,
+                todoList = savedTodos ?: state.todoList
+            )
+        }
     }
 
     fun updateCalibration(context: Context, transform: (IslandCalibration) -> IslandCalibration) {
@@ -420,23 +451,53 @@ object IslandRepository {
             val updated = state.todoList.map {
                 if (it.id == id) it.copy(isDone = !it.isDone) else it
             }
+            saveTodoList(updated)
             state.copy(todoList = updated)
         }
     }
 
     fun addTodoItem(text: String) {
-        val trimmed = text.trim()
-        if (trimmed.isBlank()) return
+        val sanitized = text.trim().replace("\n", " ").replace("||", " ")
+        if (sanitized.isBlank()) return
         _uiState.update { state ->
             val nextId = (state.todoList.maxOfOrNull { it.id } ?: 0) + 1
-            state.copy(todoList = state.todoList + TodoItem(id = nextId, text = trimmed, isDone = false))
+            val updated = state.todoList + TodoItem(id = nextId, text = sanitized, isDone = false)
+            saveTodoList(updated)
+            state.copy(todoList = updated)
         }
     }
 
     fun deleteTodoItem(id: Int) {
         _uiState.update { state ->
-            state.copy(todoList = state.todoList.filterNot { it.id == id })
+            val updated = state.todoList.filterNot { it.id == id }
+            saveTodoList(updated)
+            state.copy(todoList = updated)
         }
+    }
+
+    private fun loadTodoList(prefs: SharedPreferences): List<TodoItem>? {
+        if (!prefs.contains(KEY_TODO_LIST)) return null
+        val raw = prefs.getString(KEY_TODO_LIST, "") ?: return emptyList()
+        if (raw.isBlank()) return emptyList()
+        return raw.lineSequence()
+            .mapNotNull { line ->
+                val parts = line.split("||")
+                if (parts.size < 3) return@mapNotNull null
+                val id = parts[0].toIntOrNull() ?: return@mapNotNull null
+                val isDone = parts.last().toBooleanStrictOrNull() ?: false
+                val text = parts.subList(1, parts.size - 1).joinToString("||")
+                if (text.isBlank()) null else TodoItem(id = id, text = text, isDone = isDone)
+            }
+            .toList()
+    }
+
+    private fun saveTodoList(list: List<TodoItem>) {
+        val ctx = appContext ?: return
+        val encoded = list.joinToString("\n") { "${it.id}||${it.text}||${it.isDone}" }
+        ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putString(KEY_TODO_LIST, encoded)
+            .apply()
     }
 
     fun startStopwatch() {
@@ -470,14 +531,7 @@ object IslandRepository {
     fun refreshPrayerTimes() {
         val cal = Calendar.getInstance(TimeZone.getTimeZone("Asia/Jakarta"))
         val currentMinutes = cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE)
-        val prayers = listOf(
-            Triple("Subuh", 280, "04:40"),
-            Triple("Dzuhur", 725, "12:05"),
-            Triple("Ashar", 927, "15:27"),
-            Triple("Maghrib", 1090, "18:10"),
-            Triple("Isya", 1162, "19:22")
-        )
-        val next = prayers.firstOrNull { it.second > currentMinutes }
+        val next = PADANG_PRAYERS.firstOrNull { it.second > currentMinutes }
             ?: Triple("Subuh", 280 + 1440, "04:40")
         val diffMinutes = if (next.second >= currentMinutes) next.second - currentMinutes else (next.second + 1440) - currentMinutes
         val hours = diffMinutes / 60
@@ -506,5 +560,144 @@ object IslandRepository {
                 )
             )
         }
+    }
+
+    fun schedulePrayerAlarms(context: Context) {
+        val appCtx = context.applicationContext
+        val am = appCtx.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
+        val jakartaTz = TimeZone.getTimeZone("Asia/Jakarta")
+        val nowMillis = System.currentTimeMillis()
+
+        PADANG_PRAYERS.forEachIndexed { index, (name, totalMinutes, timeStr) ->
+            val cal = Calendar.getInstance(jakartaTz).apply {
+                timeInMillis = nowMillis
+                set(Calendar.HOUR_OF_DAY, totalMinutes / 60)
+                set(Calendar.MINUTE, totalMinutes % 60)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+                if (timeInMillis <= nowMillis) {
+                    add(Calendar.DAY_OF_YEAR, 1)
+                }
+            }
+
+            val intent = Intent(appCtx, PrayerAlarmReceiver::class.java).apply {
+                putExtra(PrayerAlarmReceiver.EXTRA_PRAYER_NAME, name)
+                putExtra(PrayerAlarmReceiver.EXTRA_PRAYER_TIME, timeStr)
+            }
+            val pi = PendingIntent.getBroadcast(
+                appCtx,
+                3000 + index,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
+            try {
+                val canExact = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    am.canScheduleExactAlarms()
+                } else {
+                    true
+                }
+                if (canExact) {
+                    am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, cal.timeInMillis, pi)
+                } else {
+                    am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, cal.timeInMillis, pi)
+                }
+            } catch (_: SecurityException) {
+                am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, cal.timeInMillis, pi)
+            }
+        }
+    }
+
+    fun triggerPrayerAlert(context: Context, prayerName: String, prayerTime: String) {
+        val appCtx = context.applicationContext
+        transientBannerJob?.cancel()
+        prayerAlertJob?.cancel()
+        stopPrayerSoundAndVibration(appCtx)
+
+        _uiState.update { state ->
+            state.copy(
+                prayerAlert = PrayerAlertState(prayerName = prayerName, prayerTime = prayerTime),
+                mode = IslandMode.PRAYER_ALERT,
+                isExpanded = false
+            )
+        }
+
+        startPrayerSoundAndVibration(appCtx)
+
+        prayerAlertJob = repoScope.launch {
+            delay(8000L)
+            dismissPrayerAlert()
+        }
+    }
+
+    fun dismissPrayerAlert() {
+        prayerAlertJob?.cancel()
+        appContext?.let { stopPrayerSoundAndVibration(it) }
+        _uiState.update { state ->
+            if (state.mode == IslandMode.PRAYER_ALERT) {
+                val nextMode = if (state.music.isPlaying) IslandMode.MUSIC else IslandMode.IDLE
+                state.copy(mode = nextMode, isExpanded = false)
+            } else {
+                state
+            }
+        }
+        if (_uiState.value.mode == IslandMode.IDLE && !_uiState.value.isAppOpen) {
+            restartEveIdleCountdown()
+        }
+    }
+
+    private fun startPrayerSoundAndVibration(context: Context) {
+        try {
+            val uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+                ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+            val ringtone = RingtoneManager.getRingtone(context, uri)
+            if (ringtone != null) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                    ringtone.audioAttributes = AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_ALARM)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build()
+                }
+                ringtone.play()
+                activePrayerRingtone = ringtone
+            }
+        } catch (_: Exception) {}
+
+        try {
+            val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                (context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager)?.defaultVibrator
+            } else {
+                @Suppress("DEPRECATION")
+                context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+            }
+            if (vibrator?.hasVibrator() == true) {
+                // Pola getar lembut bertahap seperti ketukan pengingat sholat
+                val timings = longArrayOf(0L, 350L, 250L, 350L, 600L, 450L, 250L, 450L)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    val amplitudes = intArrayOf(0, 180, 0, 200, 0, 230, 0, 255)
+                    vibrator.vibrate(VibrationEffect.createWaveform(timings, amplitudes, -1))
+                } else {
+                    @Suppress("DEPRECATION")
+                    vibrator.vibrate(timings, -1)
+                }
+            }
+        } catch (_: Exception) {}
+    }
+
+    private fun stopPrayerSoundAndVibration(context: Context) {
+        try {
+            activePrayerRingtone?.stop()
+        } catch (_: Exception) {}
+        activePrayerRingtone = null
+
+        try {
+            val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                (context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager)?.defaultVibrator
+            } else {
+                @Suppress("DEPRECATION")
+                context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+            }
+            vibrator?.cancel()
+        } catch (_: Exception) {}
     }
 }

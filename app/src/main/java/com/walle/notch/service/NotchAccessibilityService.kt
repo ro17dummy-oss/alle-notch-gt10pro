@@ -92,6 +92,7 @@ class NotchAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         IslandRepository.loadCalibration(applicationContext)
+        IslandRepository.schedulePrayerAlarms(applicationContext)
         IslandRepository.setOverlayServiceRunning(true)
 
         val isLandscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
