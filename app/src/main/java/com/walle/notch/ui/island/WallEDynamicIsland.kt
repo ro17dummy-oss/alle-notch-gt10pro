@@ -3045,7 +3045,7 @@ private fun SystemHudModuleContent(state: IslandUiState, normalWidth: Dp) {
     // Infinix GT 10 Pro physical punch-hole camera safe clearance: 23dp + 6dp buffer = 29dp centered at X = 0
     val cameraHoleWidth = (cal.cameraHoleSizeDp + 6).dp
     // Two-Wing Geometry: exact symmetrical wing width calculation (W - 29dp) / 2
-    val rawWing = (normalWidth - cameraHoleWidth) / 2
+    val rawWing = (normalWidth - cameraHoleWidth) / 2f
     val wingWidth = if (rawWing < 0.dp) 0.dp else rawWing
 
     when (hud.type) {
@@ -3099,7 +3099,7 @@ private fun VolumeHudRow(hud: SystemHudState, wingWidth: Dp, cameraHoleWidth: Dp
                     modifier = Modifier.size(18.dp)
                 )
 
-                val percentage = (animFraction * 100).roundToInt()
+                val percentage = (animFraction * 100f).toInt()
                 Text(
                     text = if (hud.valueFraction <= 0.01f) "MUTE" else "$percentage%",
                     color = Color.White.copy(alpha = 0.92f),

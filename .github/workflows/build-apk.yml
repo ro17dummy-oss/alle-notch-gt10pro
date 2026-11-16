@@ -29,13 +29,16 @@ jobs:
           gradle-version: '8.7'
 
       - name: Build Debug & Release Signed APK
-        run: gradle assembleDebug assembleRelease --stacktrace --info 2>&1 | tee build.log
+        shell: bash
+        run: |
+          set -o pipefail
+          gradle assembleDebug assembleRelease --stacktrace 2>&1 | tee build.log
 
-      - name: Upload Build Log on Failure
-        if: failure()
+      - name: Upload Build Log
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: build-failure-log
+          name: build-log
           path: build.log
 
       - name: Upload Wall-E Notch Debug APK
