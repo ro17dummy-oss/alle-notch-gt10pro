@@ -32,6 +32,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -3044,7 +3045,8 @@ private fun SystemHudModuleContent(state: IslandUiState, normalWidth: Dp) {
     // Infinix GT 10 Pro physical punch-hole camera safe clearance: 23dp + 6dp buffer = 29dp centered at X = 0
     val cameraHoleWidth = (cal.cameraHoleSizeDp + 6).dp
     // Two-Wing Geometry: exact symmetrical wing width calculation (W - 29dp) / 2
-    val wingWidth = ((normalWidth - cameraHoleWidth) / 2).coerceAtLeast(0.dp)
+    val rawWing = (normalWidth - cameraHoleWidth) / 2
+    val wingWidth = if (rawWing < 0.dp) 0.dp else rawWing
 
     when (hud.type) {
         SystemHudType.VOLUME -> {
@@ -3182,7 +3184,7 @@ private fun BluetoothHudRow(hud: SystemHudState, wingWidth: Dp, cameraHoleWidth:
                         maxLines = 1,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .basicMarquee(iterations = Int.MAX_VALUE)
+                            .basicMarquee()
                     )
                     Text(
                         text = hud.subtitle.ifBlank { if (isConnected) "Connected" else "Disconnected" },
@@ -3191,7 +3193,7 @@ private fun BluetoothHudRow(hud: SystemHudState, wingWidth: Dp, cameraHoleWidth:
                         maxLines = 1,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .basicMarquee(iterations = Int.MAX_VALUE)
+                            .basicMarquee()
                     )
                 }
             }
@@ -3266,7 +3268,7 @@ private fun ChargerHudRow(hud: SystemHudState, wingWidth: Dp, cameraHoleWidth: D
                         maxLines = 1,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .basicMarquee(iterations = Int.MAX_VALUE)
+                            .basicMarquee()
                     )
                     Text(
                         text = hud.subtitle.ifBlank { if (isConnected) "Plugged in" else "Discharging" },
@@ -3275,7 +3277,7 @@ private fun ChargerHudRow(hud: SystemHudState, wingWidth: Dp, cameraHoleWidth: D
                         maxLines = 1,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .basicMarquee(iterations = Int.MAX_VALUE)
+                            .basicMarquee()
                     )
                 }
             }
@@ -3366,7 +3368,7 @@ private fun RingerModeHudRow(hud: SystemHudState, wingWidth: Dp, cameraHoleWidth
                         maxLines = 1,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .basicMarquee(iterations = Int.MAX_VALUE)
+                            .basicMarquee()
                     )
                     Text(
                         text = hud.subtitle,
@@ -3375,7 +3377,7 @@ private fun RingerModeHudRow(hud: SystemHudState, wingWidth: Dp, cameraHoleWidth
                         maxLines = 1,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .basicMarquee(iterations = Int.MAX_VALUE)
+                            .basicMarquee()
                     )
                 }
             }
