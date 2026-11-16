@@ -282,7 +282,7 @@ private fun NotchBody(
     val contentHorizontalPad = if (state.isExpanded || state.mode == IslandMode.PRAYER_ALERT) {
         24.dp
     } else if (state.mode == IslandMode.SYSTEM_HUD) {
-        10.dp
+        0.dp
     } else {
         cal.cornerWidthDp.dp
     }
@@ -427,7 +427,7 @@ private fun NotchBody(
                     )
                     state.mode == IslandMode.CALL_TIMER -> CallTimerModuleContent(state)
                     state.mode == IslandMode.PRAYER_ALERT -> PrayerAlertModuleContent(state)
-                    state.mode == IslandMode.SYSTEM_HUD -> SystemHudModuleContent(state)
+                    state.mode == IslandMode.SYSTEM_HUD -> SystemHudModuleContent(state, normalWidth)
                     else -> IdleModuleContent(state, onRequestKeyboardFocus)
                 }
             }
@@ -3038,34 +3038,37 @@ private fun formatSeconds(totalSec: Int): String {
 }
 
 @Composable
-private fun SystemHudModuleContent(state: IslandUiState) {
+private fun SystemHudModuleContent(state: IslandUiState, normalWidth: Dp) {
     val hud = state.systemHud
     val cal = state.calibration
+    // Infinix GT 10 Pro physical punch-hole camera safe clearance: 23dp + 6dp buffer = 29dp centered at X = 0
     val cameraHoleWidth = (cal.cameraHoleSizeDp + 6).dp
+    // Two-Wing Geometry: exact symmetrical wing width calculation (W - 29dp) / 2
+    val wingWidth = ((normalWidth - cameraHoleWidth) / 2).coerceAtLeast(0.dp)
 
     when (hud.type) {
         SystemHudType.VOLUME -> {
-            VolumeHudRow(hud = hud)
+            VolumeHudRow(hud = hud, wingWidth = wingWidth, cameraHoleWidth = cameraHoleWidth)
         }
         SystemHudType.BLUETOOTH_CONNECTED,
         SystemHudType.BLUETOOTH_DISCONNECTED -> {
-            BluetoothHudRow(hud = hud, cameraHoleWidth = cameraHoleWidth)
+            BluetoothHudRow(hud = hud, wingWidth = wingWidth, cameraHoleWidth = cameraHoleWidth)
         }
         SystemHudType.CHARGER_CONNECTED,
         SystemHudType.CHARGER_DISCONNECTED -> {
-            ChargerHudRow(hud = hud, cameraHoleWidth = cameraHoleWidth)
+            ChargerHudRow(hud = hud, wingWidth = wingWidth, cameraHoleWidth = cameraHoleWidth)
         }
         SystemHudType.RINGER_MODE -> {
-            RingerModeHudRow(hud = hud, cameraHoleWidth = cameraHoleWidth)
+            RingerModeHudRow(hud = hud, wingWidth = wingWidth, cameraHoleWidth = cameraHoleWidth)
         }
         else -> {
-            VolumeHudRow(hud = hud)
+            VolumeHudRow(hud = hud, wingWidth = wingWidth, cameraHoleWidth = cameraHoleWidth)
         }
     }
 }
 
 @Composable
-private fun VolumeHudRow(hud: SystemHudState) {
+private fun VolumeHudRow(hud: SystemHudState, wingWidth: Dp, cameraHoleWidth: Dp) {
     val animFraction by animateFloatAsState(
         targetValue = hud.valueFraction.coerceIn(0f, 1f),
         animationSpec = spring(stiffness = Spring.StiffnessHigh, dampingRatio = Spring.DampingRatioNoBouncy),
@@ -3073,222 +3076,342 @@ private fun VolumeHudRow(hud: SystemHudState) {
     )
 
     Row(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 4.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
+        modifier = Modifier.fillMaxSize(),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        VolumeSpeakerIcon(
-            fraction = hud.valueFraction,
-            modifier = Modifier.size(18.dp)
-        )
-
+        // Left Wing: Speaker Icon + Exact Numeric Percentage (Option A)
         Box(
             modifier = Modifier
-                .weight(1f)
-                .height(5.dp)
-                .clip(CircleShape)
-                .background(Color.White.copy(alpha = 0.16f))
+                .width(wingWidth)
+                .fillMaxHeight()
+                .clipToBounds()
+                .padding(start = 12.dp, end = 2.dp),
+            contentAlignment = Alignment.CenterStart
         ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(animFraction)
-                    .fillMaxHeight()
-                    .clip(CircleShape)
-                    .background(Color.White)
-            )
-        }
-    }
-}
-
-@Composable
-private fun BluetoothHudRow(hud: SystemHudState, cameraHoleWidth: Dp) {
-    val isConnected = hud.type == SystemHudType.BLUETOOTH_CONNECTED
-
-    Row(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 4.dp, vertical = 2.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        // Left Wing: Circular Bluetooth Badge + Text (Name & Subtitle)
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.weight(1f)
-        ) {
-            BluetoothBadgeIcon(
-                isConnected = isConnected,
-                batteryLevel = hud.batteryLevel,
-                modifier = Modifier.size(24.dp)
-            )
-
-            Column(modifier = Modifier.weight(1f, fill = false)) {
-                Text(
-                    text = hud.title.ifBlank { "Bluetooth" },
-                    color = Color.White,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = hud.subtitle.ifBlank { if (isConnected) "Connected" else "Disconnected" },
-                    color = Color(0xFF94A3B8),
-                    fontSize = 9.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-        }
-
-        // Ruang kamera tengah Infinix GT 10 Pro
-        Spacer(modifier = Modifier.width(cameraHoleWidth))
-
-        // Right Wing: Headphone icon (dengan cyan ring jika connect)
-        Row(
-            modifier = Modifier.weight(0.40f),
-            horizontalArrangement = Arrangement.End,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            HeadphoneSilhouetteIcon(
-                isConnected = isConnected,
-                modifier = Modifier.size(22.dp)
-            )
-        }
-    }
-}
-
-@Composable
-private fun ChargerHudRow(hud: SystemHudState, cameraHoleWidth: Dp) {
-    val isConnected = hud.type == SystemHudType.CHARGER_CONNECTED
-    val accentColor = if (isConnected) DirectivePlantGreen else WallESolarAmber
-
-    Row(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 4.dp, vertical = 2.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.weight(1f)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(24.dp)
-                    .clip(CircleShape)
-                    .background(accentColor.copy(alpha = 0.18f)),
-                contentAlignment = Alignment.Center
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                LightningBoltIcon(
-                    tint = accentColor,
-                    modifier = Modifier.size(13.dp)
+                VolumeSpeakerIcon(
+                    fraction = hud.valueFraction,
+                    modifier = Modifier.size(18.dp)
                 )
-            }
 
-            Column(modifier = Modifier.weight(1f, fill = false)) {
+                val percentage = (animFraction * 100).roundToInt()
                 Text(
-                    text = hud.title,
-                    color = Color.White,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = hud.subtitle,
-                    color = accentColor,
-                    fontSize = 9.sp,
+                    text = if (hud.valueFraction <= 0.01f) "MUTE" else "$percentage%",
+                    color = Color.White.copy(alpha = 0.92f),
+                    fontSize = 11.5.sp,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = 0.5.sp,
                     maxLines = 1
                 )
             }
         }
 
+        // Camera Safe Clearance Void: 29dp centered at X = 0
         Spacer(modifier = Modifier.width(cameraHoleWidth))
 
-        Row(
-            modifier = Modifier.weight(0.40f),
-            horizontalArrangement = Arrangement.End,
-            verticalAlignment = Alignment.CenterVertically
+        // Right Wing: Sleek Horizontal Volume Progress Slider Bar
+        Box(
+            modifier = Modifier
+                .width(wingWidth)
+                .fillMaxHeight()
+                .clipToBounds()
+                .padding(start = 2.dp, end = 12.dp),
+            contentAlignment = Alignment.Center
         ) {
-            Text(
-                text = if (hud.batteryLevel > 0) "${hud.batteryLevel}%" else "",
-                color = Color.White,
-                fontSize = 12.sp,
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Bold
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(5.5.dp)
+                    .clip(CircleShape)
+                    .background(Color.White.copy(alpha = 0.18f))
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(animFraction)
+                        .fillMaxHeight()
+                        .clip(CircleShape)
+                        .background(Color.White)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun BluetoothHudRow(hud: SystemHudState, wingWidth: Dp, cameraHoleWidth: Dp) {
+    val isConnected = hud.type == SystemHudType.BLUETOOTH_CONNECTED
+
+    Row(
+        modifier = Modifier.fillMaxSize(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Left Wing: Circular Bluetooth Badge + Smooth Marquee Text
+        Box(
+            modifier = Modifier
+                .width(wingWidth)
+                .fillMaxHeight()
+                .clipToBounds()
+                .padding(start = 10.dp, end = 2.dp),
+            contentAlignment = Alignment.CenterStart
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(7.dp)
+            ) {
+                BluetoothBadgeIcon(
+                    isConnected = isConnected,
+                    batteryLevel = hud.batteryLevel,
+                    modifier = Modifier.size(24.dp)
+                )
+
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clipToBounds()
+                ) {
+                    Text(
+                        text = hud.title.ifBlank { "Bluetooth" },
+                        color = Color.White,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .basicMarquee(iterations = Int.MAX_VALUE)
+                    )
+                    Text(
+                        text = hud.subtitle.ifBlank { if (isConnected) "Connected" else "Disconnected" },
+                        color = Color(0xFF94A3B8),
+                        fontSize = 9.sp,
+                        maxLines = 1,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .basicMarquee(iterations = Int.MAX_VALUE)
+                    )
+                }
+            }
+        }
+
+        // Camera Safe Clearance Void: exactly 29dp centered at X = 0
+        Spacer(modifier = Modifier.width(cameraHoleWidth))
+
+        // Right Wing: Headphone Silhouette Icon with dual glowing concentric rings
+        Box(
+            modifier = Modifier
+                .width(wingWidth)
+                .fillMaxHeight()
+                .clipToBounds()
+                .padding(start = 2.dp, end = 10.dp),
+            contentAlignment = Alignment.CenterEnd
+        ) {
+            HeadphoneSilhouetteIcon(
+                isConnected = isConnected,
+                modifier = Modifier.size(24.dp)
             )
         }
     }
 }
 
 @Composable
-private fun RingerModeHudRow(hud: SystemHudState, cameraHoleWidth: Dp) {
+private fun ChargerHudRow(hud: SystemHudState, wingWidth: Dp, cameraHoleWidth: Dp) {
+    val isConnected = hud.type == SystemHudType.CHARGER_CONNECTED
+    val accentColor = if (isConnected) DirectivePlantGreen else WallESolarAmber
+
+    Row(
+        modifier = Modifier.fillMaxSize(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Left Wing: Lightning Bolt Badge + Marquee Text
+        Box(
+            modifier = Modifier
+                .width(wingWidth)
+                .fillMaxHeight()
+                .clipToBounds()
+                .padding(start = 10.dp, end = 2.dp),
+            contentAlignment = Alignment.CenterStart
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(7.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(24.dp)
+                        .clip(CircleShape)
+                        .background(accentColor.copy(alpha = 0.18f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    LightningBoltIcon(
+                        tint = accentColor,
+                        modifier = Modifier.size(13.dp)
+                    )
+                }
+
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clipToBounds()
+                ) {
+                    Text(
+                        text = hud.title.ifBlank { if (isConnected) "Charging" else "Unplugged" },
+                        color = Color.White,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .basicMarquee(iterations = Int.MAX_VALUE)
+                    )
+                    Text(
+                        text = hud.subtitle.ifBlank { if (isConnected) "Plugged in" else "Discharging" },
+                        color = accentColor,
+                        fontSize = 9.sp,
+                        maxLines = 1,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .basicMarquee(iterations = Int.MAX_VALUE)
+                    )
+                }
+            }
+        }
+
+        // Camera Safe Clearance Void: exactly 29dp centered at X = 0
+        Spacer(modifier = Modifier.width(cameraHoleWidth))
+
+        // Right Wing: Monospace Battery Percentage & Status Dot
+        Box(
+            modifier = Modifier
+                .width(wingWidth)
+                .fillMaxHeight()
+                .clipToBounds()
+                .padding(start = 2.dp, end = 10.dp),
+            contentAlignment = Alignment.CenterEnd
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = if (hud.batteryLevel > 0) "${hud.batteryLevel}%" else "",
+                    color = Color.White,
+                    fontSize = 12.sp,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Bold
+                )
+                Box(
+                    modifier = Modifier
+                        .size(6.dp)
+                        .clip(CircleShape)
+                        .background(accentColor)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RingerModeHudRow(hud: SystemHudState, wingWidth: Dp, cameraHoleWidth: Dp) {
     val isSilent = hud.ringerModeName == "silent"
     val isVibrate = hud.ringerModeName == "vibrate"
     val iconColor = if (isSilent) AxiomAlertRed else if (isVibrate) WallESolarAmber else DirectivePlantGreen
 
     Row(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 4.dp, vertical = 2.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+        modifier = Modifier.fillMaxSize(),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.weight(1f)
+        // Left Wing: Ringer Icon Badge + Marquee Text
+        Box(
+            modifier = Modifier
+                .width(wingWidth)
+                .fillMaxHeight()
+                .clipToBounds()
+                .padding(start = 10.dp, end = 2.dp),
+            contentAlignment = Alignment.CenterStart
         ) {
-            Box(
-                modifier = Modifier
-                    .size(24.dp)
-                    .clip(CircleShape)
-                    .background(iconColor.copy(alpha = 0.18f)),
-                contentAlignment = Alignment.Center
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(7.dp)
             ) {
-                RingerModeIcon(
-                    modeName = hud.ringerModeName,
-                    tint = iconColor,
-                    modifier = Modifier.size(13.dp)
-                )
-            }
+                Box(
+                    modifier = Modifier
+                        .size(24.dp)
+                        .clip(CircleShape)
+                        .background(iconColor.copy(alpha = 0.18f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    RingerModeIcon(
+                        modeName = hud.ringerModeName,
+                        tint = iconColor,
+                        modifier = Modifier.size(13.dp)
+                    )
+                }
 
-            Column(modifier = Modifier.weight(1f, fill = false)) {
-                Text(
-                    text = hud.title,
-                    color = Color.White,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1
-                )
-                Text(
-                    text = hud.subtitle,
-                    color = iconColor,
-                    fontSize = 9.sp,
-                    maxLines = 1
-                )
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clipToBounds()
+                ) {
+                    Text(
+                        text = hud.title,
+                        color = Color.White,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .basicMarquee(iterations = Int.MAX_VALUE)
+                    )
+                    Text(
+                        text = hud.subtitle,
+                        color = iconColor,
+                        fontSize = 9.sp,
+                        maxLines = 1,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .basicMarquee(iterations = Int.MAX_VALUE)
+                    )
+                }
             }
         }
 
+        // Camera Safe Clearance Void: exactly 29dp centered at X = 0
         Spacer(modifier = Modifier.width(cameraHoleWidth))
 
-        Row(
-            modifier = Modifier.weight(0.40f),
-            horizontalArrangement = Arrangement.End,
-            verticalAlignment = Alignment.CenterVertically
+        // Right Wing: Mode Badge Pill
+        Box(
+            modifier = Modifier
+                .width(wingWidth)
+                .fillMaxHeight()
+                .clipToBounds()
+                .padding(start = 2.dp, end = 10.dp),
+            contentAlignment = Alignment.CenterEnd
         ) {
             Box(
                 modifier = Modifier
-                    .size(7.dp)
-                    .clip(CircleShape)
-                    .background(iconColor)
-            )
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(iconColor.copy(alpha = 0.20f))
+                    .border(0.8.dp, iconColor.copy(alpha = 0.50f), RoundedCornerShape(4.dp))
+                    .padding(horizontal = 6.dp, vertical = 2.dp)
+            ) {
+                Text(
+                    text = when {
+                        isSilent -> "MUTE"
+                        isVibrate -> "VIB"
+                        else -> "RING"
+                    },
+                    color = iconColor,
+                    fontSize = 9.sp,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
     }
 }
@@ -3387,14 +3510,22 @@ private fun HeadphoneSilhouetteIcon(
         val h = size.height
 
         if (isConnected) {
+            // Lingkaran luar konsentris bercahaya cyan (Image 3 match)
             drawCircle(
-                color = EveCyanGlow.copy(alpha = 0.32f),
+                color = EveCyanGlow.copy(alpha = 0.40f),
                 radius = w * 0.50f,
                 style = Stroke(width = 1.2.dp.toPx())
             )
+            // Lingkaran dalam konsentris bercahaya cyan
             drawCircle(
-                color = EveCyanGlow.copy(alpha = 0.10f),
-                radius = w * 0.44f
+                color = EveCyanGlow.copy(alpha = 0.22f),
+                radius = w * 0.40f,
+                style = Stroke(width = 0.9.dp.toPx())
+            )
+            // Latar pendaran lembut
+            drawCircle(
+                color = EveCyanGlow.copy(alpha = 0.08f),
+                radius = w * 0.40f
             )
         }
 
