@@ -34,6 +34,15 @@ jobs:
           set -o pipefail
           gradle assembleDebug assembleRelease --stacktrace 2>&1 | tee build.log
 
+      - name: Print Gradle Errors
+        if: failure()
+        shell: bash
+        run: |
+          echo "=== GRADLE ERRORS ==="
+          grep -E "e: |FAILURE:|Caused by:" build.log | head -n 30 | while IFS= read -r line; do
+            echo "::error::$line"
+          done
+
       - name: Upload Build Log
         if: always()
         uses: actions/upload-artifact@v4
