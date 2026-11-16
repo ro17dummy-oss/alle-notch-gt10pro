@@ -44,6 +44,8 @@ import androidx.compose.ui.unit.sp
 import com.walle.notch.core.model.EveMood
 import com.walle.notch.core.model.IslandMode
 import com.walle.notch.core.model.IslandUiState
+import com.walle.notch.core.model.SystemHudState
+import com.walle.notch.core.model.SystemHudType
 import com.walle.notch.core.state.IslandRepository
 import com.walle.notch.service.NotchWindowOverlayService
 import com.walle.notch.ui.island.WallEDynamicIslandOverlay
@@ -256,6 +258,27 @@ private fun WallESettingsScreen(state: IslandUiState) {
             ) {
                 context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
             }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val hasBtPermission = androidx.core.content.ContextCompat.checkSelfPermission(
+                    context,
+                    android.Manifest.permission.BLUETOOTH_CONNECT
+                ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+
+                PermissionRowCard(
+                    title = "Izin Nama Bluetooth (Android 12+)",
+                    subtitle = "Mendeteksi nama headset & baterai TWS di notch",
+                    isActive = hasBtPermission,
+                    buttonText = if (hasBtPermission) "Aktif" else "Beri Izin"
+                ) {
+                    if (!hasBtPermission) {
+                        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                            data = Uri.fromParts("package", context.packageName, null)
+                        }
+                        context.startActivity(intent)
+                    }
+                }
+            }
         }
 
         // Section 2: Cute EVE Expressions
@@ -359,6 +382,62 @@ private fun WallESettingsScreen(state: IslandUiState) {
                     accent = EveCyanGlow
                 ) {
                     IslandRepository.setMode(IslandMode.NOTIFICATION, expand = false)
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                ModeSelectButton(
+                    modifier = Modifier.weight(1f),
+                    label = "🔊 Test Vol",
+                    selected = state.mode == IslandMode.SYSTEM_HUD && state.systemHud.type == SystemHudType.VOLUME,
+                    accent = Color.White
+                ) {
+                    IslandRepository.postSystemHud(
+                        SystemHudState(
+                            type = SystemHudType.VOLUME,
+                            valueFraction = 0.65f,
+                            title = "Volume",
+                            subtitle = "65%"
+                        ),
+                        durationMs = 2500L
+                    )
+                }
+                ModeSelectButton(
+                    modifier = Modifier.weight(1f),
+                    label = "🎧 BT 68%",
+                    selected = state.mode == IslandMode.SYSTEM_HUD && state.systemHud.type == SystemHudType.BLUETOOTH_CONNECTED,
+                    accent = EveCyanGlow
+                ) {
+                    IslandRepository.postSystemHud(
+                        SystemHudState(
+                            type = SystemHudType.BLUETOOTH_CONNECTED,
+                            title = "ROBOT RB520",
+                            subtitle = "Connected · 68%",
+                            valueFraction = 0.68f,
+                            batteryLevel = 68
+                        ),
+                        durationMs = 3500L
+                    )
+                }
+                ModeSelectButton(
+                    modifier = Modifier.weight(1f),
+                    label = "🔌 Cas In",
+                    selected = state.mode == IslandMode.SYSTEM_HUD && state.systemHud.type == SystemHudType.CHARGER_CONNECTED,
+                    accent = DirectivePlantGreen
+                ) {
+                    IslandRepository.postSystemHud(
+                        SystemHudState(
+                            type = SystemHudType.CHARGER_CONNECTED,
+                            title = "Pengisian Daya",
+                            subtitle = "45W Cepat · 84%",
+                            valueFraction = 0.84f,
+                            batteryLevel = 84
+                        ),
+                        durationMs = 3000L
+                    )
                 }
             }
 

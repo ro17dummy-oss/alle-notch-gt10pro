@@ -95,6 +95,8 @@ import com.walle.notch.core.model.EveMood
 import com.walle.notch.core.model.IslandMode
 import com.walle.notch.core.model.IslandUiState
 import com.walle.notch.core.model.NotificationPayload
+import com.walle.notch.core.model.SystemHudState
+import com.walle.notch.core.model.SystemHudType
 import com.walle.notch.core.state.IslandRepository
 import com.walle.notch.service.NotchNotificationListenerService
 import com.walle.notch.ui.theme.AxiomAlertRed
@@ -208,6 +210,12 @@ private fun NotchBody(
     val normalWidth: Dp = when {
         isHiddenInCamera -> cal.cameraHoleSizeDp.dp
         state.mode == IslandMode.PRAYER_ALERT -> 304.dp
+        state.mode == IslandMode.SYSTEM_HUD -> when (state.systemHud.type) {
+            SystemHudType.VOLUME -> 246.dp
+            SystemHudType.BLUETOOTH_CONNECTED, SystemHudType.BLUETOOTH_DISCONNECTED -> 272.dp
+            SystemHudType.CHARGER_CONNECTED, SystemHudType.CHARGER_DISCONNECTED -> 258.dp
+            else -> 246.dp
+        }
         state.isExpanded -> when (state.mode) {
             IslandMode.IDLE -> 318.dp          // Nusa Multi-Card Interactive Dashboard
             IslandMode.MUSIC -> 318.dp         // Nusa-style sleek music player
@@ -215,6 +223,7 @@ private fun NotchBody(
             IslandMode.NOTIFICATION -> 320.dp  // Clean quick reply card
             IslandMode.CALL_TIMER -> 300.dp
             IslandMode.PRAYER_ALERT -> 304.dp
+            IslandMode.SYSTEM_HUD -> 260.dp
         }
         else -> when (state.mode) {
             IslandMode.IDLE -> cal.idleWidthDp.dp
@@ -223,12 +232,19 @@ private fun NotchBody(
             IslandMode.NOTIFICATION -> cal.idleWidthDp.dp // Tetap di ukuran biasa 202dp!
             IslandMode.CALL_TIMER -> 244.dp
             IslandMode.PRAYER_ALERT -> 304.dp
+            IslandMode.SYSTEM_HUD -> when (state.systemHud.type) {
+                SystemHudType.VOLUME -> 246.dp
+                SystemHudType.BLUETOOTH_CONNECTED, SystemHudType.BLUETOOTH_DISCONNECTED -> 272.dp
+                SystemHudType.CHARGER_CONNECTED, SystemHudType.CHARGER_DISCONNECTED -> 258.dp
+                else -> 246.dp
+            }
         }
     }
 
     val normalHeight: Dp = when {
         isHiddenInCamera -> cal.cameraHoleSizeDp.dp
         state.mode == IslandMode.PRAYER_ALERT -> 86.dp
+        state.mode == IslandMode.SYSTEM_HUD -> cal.idleHeightDp.dp
         state.isExpanded -> when (state.mode) {
             IslandMode.IDLE -> 144.dp          // 4-Card Dashboard (Musik, Sholat, Catatan, Stopwatch)
             IslandMode.MUSIC -> 144.dp         // Konsisten 144dp saat expand
@@ -236,6 +252,7 @@ private fun NotchBody(
             IslandMode.NOTIFICATION -> 110.dp  // Tinggi pas untuk balas cepat tanpa mubazir
             IslandMode.CALL_TIMER -> 124.dp
             IslandMode.PRAYER_ALERT -> 86.dp
+            IslandMode.SYSTEM_HUD -> cal.idleHeightDp.dp
         }
         else -> cal.idleHeightDp.dp
     }
@@ -262,7 +279,13 @@ private fun NotchBody(
     )
 
     // Padding isi tetap (tidak dianimasikan) karena isi di-layout pada ukuran final
-    val contentHorizontalPad = if (state.isExpanded || state.mode == IslandMode.PRAYER_ALERT) 24.dp else cal.cornerWidthDp.dp
+    val contentHorizontalPad = if (state.isExpanded || state.mode == IslandMode.PRAYER_ALERT) {
+        24.dp
+    } else if (state.mode == IslandMode.SYSTEM_HUD) {
+        10.dp
+    } else {
+        cal.cornerWidthDp.dp
+    }
 
     // Isi (mata EVE dll) fade-in setelah notch hampir selesai tumbuh; fade-out cepat saat mengecil
     val contentAlpha by animateFloatAsState(
@@ -306,6 +329,8 @@ private fun NotchBody(
                             } catch (_: Exception) {}
                             if (state.mode == IslandMode.PRAYER_ALERT) {
                                 IslandRepository.dismissPrayerAlert()
+                            } else if (state.mode == IslandMode.SYSTEM_HUD) {
+                                IslandRepository.dismissSystemHud()
                             } else if (state.isExpanded) {
                                 IslandRepository.setExpanded(false)
                             } else if (state.mode == IslandMode.IDLE) {
@@ -327,6 +352,8 @@ private fun NotchBody(
 
                     if (state.mode == IslandMode.PRAYER_ALERT) {
                         IslandRepository.dismissPrayerAlert()
+                    } else if (state.mode == IslandMode.SYSTEM_HUD) {
+                        IslandRepository.dismissSystemHud()
                     } else if (!state.isExpanded) {
                         IslandRepository.setExpanded(true)
                     } else if (state.mode == IslandMode.IDLE) {
@@ -341,6 +368,8 @@ private fun NotchBody(
                     } catch (_: Exception) {}
                     if (state.mode == IslandMode.PRAYER_ALERT) {
                         IslandRepository.dismissPrayerAlert()
+                    } else if (state.mode == IslandMode.SYSTEM_HUD) {
+                        IslandRepository.dismissSystemHud()
                     } else if (state.isExpanded) {
                         IslandRepository.setExpanded(false)
                     } else {
@@ -398,6 +427,7 @@ private fun NotchBody(
                     )
                     state.mode == IslandMode.CALL_TIMER -> CallTimerModuleContent(state)
                     state.mode == IslandMode.PRAYER_ALERT -> PrayerAlertModuleContent(state)
+                    state.mode == IslandMode.SYSTEM_HUD -> SystemHudModuleContent(state)
                     else -> IdleModuleContent(state, onRequestKeyboardFocus)
                 }
             }
@@ -1992,6 +2022,7 @@ private fun MediaIconButton(
     iconSize: Dp = 11.dp,
     onClick: () -> Unit
 ) {
+    val cachedPath = remember { Path() }
     Box(
         modifier = modifier
             .clip(CircleShape)
@@ -2011,22 +2042,20 @@ private fun MediaIconButton(
                         strokeWidth = 2.dp.toPx(),
                         cap = StrokeCap.Round
                     )
-                    val path = Path().apply {
-                        moveTo(w * 0.85f, h * 0.15f)
-                        lineTo(w * 0.32f, h * 0.50f)
-                        lineTo(w * 0.85f, h * 0.85f)
-                        close()
-                    }
-                    drawPath(path = path, color = fg)
+                    cachedPath.rewind()
+                    cachedPath.moveTo(w * 0.85f, h * 0.15f)
+                    cachedPath.lineTo(w * 0.32f, h * 0.50f)
+                    cachedPath.lineTo(w * 0.85f, h * 0.85f)
+                    cachedPath.close()
+                    drawPath(path = cachedPath, color = fg)
                 }
                 MediaIconType.NEXT -> {
-                    val path = Path().apply {
-                        moveTo(w * 0.15f, h * 0.15f)
-                        lineTo(w * 0.68f, h * 0.50f)
-                        lineTo(w * 0.15f, h * 0.85f)
-                        close()
-                    }
-                    drawPath(path = path, color = fg)
+                    cachedPath.rewind()
+                    cachedPath.moveTo(w * 0.15f, h * 0.15f)
+                    cachedPath.lineTo(w * 0.68f, h * 0.50f)
+                    cachedPath.lineTo(w * 0.15f, h * 0.85f)
+                    cachedPath.close()
+                    drawPath(path = cachedPath, color = fg)
                     drawLine(
                         color = fg,
                         start = Offset(w * 0.82f, h * 0.18f),
@@ -2036,13 +2065,12 @@ private fun MediaIconButton(
                     )
                 }
                 MediaIconType.PLAY -> {
-                    val path = Path().apply {
-                        moveTo(w * 0.24f, h * 0.12f)
-                        lineTo(w * 0.86f, h * 0.50f)
-                        lineTo(w * 0.24f, h * 0.88f)
-                        close()
-                    }
-                    drawPath(path = path, color = fg)
+                    cachedPath.rewind()
+                    cachedPath.moveTo(w * 0.24f, h * 0.12f)
+                    cachedPath.lineTo(w * 0.86f, h * 0.50f)
+                    cachedPath.lineTo(w * 0.24f, h * 0.88f)
+                    cachedPath.close()
+                    drawPath(path = cachedPath, color = fg)
                 }
                 MediaIconType.PAUSE -> {
                     drawLine(
@@ -2068,13 +2096,12 @@ private fun MediaIconButton(
                         useCenter = false,
                         style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
                     )
-                    val arrowPath = Path().apply {
-                        moveTo(w * 0.40f, h * 0.02f)
-                        lineTo(w * 0.72f, h * 0.20f)
-                        lineTo(w * 0.40f, h * 0.38f)
-                        close()
-                    }
-                    drawPath(path = arrowPath, color = fg)
+                    cachedPath.rewind()
+                    cachedPath.moveTo(w * 0.40f, h * 0.02f)
+                    cachedPath.lineTo(w * 0.72f, h * 0.20f)
+                    cachedPath.lineTo(w * 0.40f, h * 0.38f)
+                    cachedPath.close()
+                    drawPath(path = cachedPath, color = fg)
                 }
             }
         }
@@ -2929,6 +2956,7 @@ private fun MosqueSilhouetteIcon(
     glowAlpha: Float,
     modifier: Modifier = Modifier
 ) {
+    val domePath = remember { Path() }
     Canvas(modifier = modifier.size(18.dp)) {
         val w = size.width
         val h = size.height
@@ -2940,25 +2968,24 @@ private fun MosqueSilhouetteIcon(
             center = Offset(w * 0.5f, h * 0.56f)
         )
 
-        // Kubah masjid minimalis + dasar
-        val domePath = Path().apply {
-            moveTo(w * 0.18f, h * 0.86f)
-            lineTo(w * 0.18f, h * 0.62f)
-            lineTo(w * 0.28f, h * 0.62f)
-            cubicTo(
-                w * 0.28f, h * 0.36f,
-                w * 0.50f, h * 0.26f,
-                w * 0.50f, h * 0.20f
-            )
-            cubicTo(
-                w * 0.50f, h * 0.26f,
-                w * 0.72f, h * 0.36f,
-                w * 0.72f, h * 0.62f
-            )
-            lineTo(w * 0.82f, h * 0.62f)
-            lineTo(w * 0.82f, h * 0.86f)
-            close()
-        }
+        // Kubah masjid minimalis + dasar (zero-allocation cached path)
+        domePath.rewind()
+        domePath.moveTo(w * 0.18f, h * 0.86f)
+        domePath.lineTo(w * 0.18f, h * 0.62f)
+        domePath.lineTo(w * 0.28f, h * 0.62f)
+        domePath.cubicTo(
+            w * 0.28f, h * 0.36f,
+            w * 0.50f, h * 0.26f,
+            w * 0.50f, h * 0.20f
+        )
+        domePath.cubicTo(
+            w * 0.50f, h * 0.26f,
+            w * 0.72f, h * 0.36f,
+            w * 0.72f, h * 0.62f
+        )
+        domePath.lineTo(w * 0.82f, h * 0.62f)
+        domePath.lineTo(w * 0.82f, h * 0.86f)
+        domePath.close()
         drawPath(path = domePath, color = tint)
 
         // Tiang puncak / bulan sabit mini di atas kubah
@@ -3008,4 +3035,529 @@ private fun formatSeconds(totalSec: Int): String {
     val m = (totalSec / 60).coerceAtLeast(0)
     val s = (totalSec % 60).coerceAtLeast(0)
     return "%02d:%02d".format(m, s)
+}
+
+@Composable
+private fun SystemHudModuleContent(state: IslandUiState) {
+    val hud = state.systemHud
+    val cal = state.calibration
+    val cameraHoleWidth = (cal.cameraHoleSizeDp + 6).dp
+
+    when (hud.type) {
+        SystemHudType.VOLUME -> {
+            VolumeHudRow(hud = hud)
+        }
+        SystemHudType.BLUETOOTH_CONNECTED,
+        SystemHudType.BLUETOOTH_DISCONNECTED -> {
+            BluetoothHudRow(hud = hud, cameraHoleWidth = cameraHoleWidth)
+        }
+        SystemHudType.CHARGER_CONNECTED,
+        SystemHudType.CHARGER_DISCONNECTED -> {
+            ChargerHudRow(hud = hud, cameraHoleWidth = cameraHoleWidth)
+        }
+        SystemHudType.RINGER_MODE -> {
+            RingerModeHudRow(hud = hud, cameraHoleWidth = cameraHoleWidth)
+        }
+        else -> {
+            VolumeHudRow(hud = hud)
+        }
+    }
+}
+
+@Composable
+private fun VolumeHudRow(hud: SystemHudState) {
+    val animFraction by animateFloatAsState(
+        targetValue = hud.valueFraction.coerceIn(0f, 1f),
+        animationSpec = spring(stiffness = Spring.StiffnessHigh, dampingRatio = Spring.DampingRatioNoBouncy),
+        label = "volFraction"
+    )
+
+    Row(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 4.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        VolumeSpeakerIcon(
+            fraction = hud.valueFraction,
+            modifier = Modifier.size(18.dp)
+        )
+
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .height(5.dp)
+                .clip(CircleShape)
+                .background(Color.White.copy(alpha = 0.16f))
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(animFraction)
+                    .fillMaxHeight()
+                    .clip(CircleShape)
+                    .background(Color.White)
+            )
+        }
+    }
+}
+
+@Composable
+private fun BluetoothHudRow(hud: SystemHudState, cameraHoleWidth: Dp) {
+    val isConnected = hud.type == SystemHudType.BLUETOOTH_CONNECTED
+
+    Row(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 4.dp, vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        // Left Wing: Circular Bluetooth Badge + Text (Name & Subtitle)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.weight(1f)
+        ) {
+            BluetoothBadgeIcon(
+                isConnected = isConnected,
+                batteryLevel = hud.batteryLevel,
+                modifier = Modifier.size(24.dp)
+            )
+
+            Column(modifier = Modifier.weight(1f, fill = false)) {
+                Text(
+                    text = hud.title.ifBlank { "Bluetooth" },
+                    color = Color.White,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = hud.subtitle.ifBlank { if (isConnected) "Connected" else "Disconnected" },
+                    color = Color(0xFF94A3B8),
+                    fontSize = 9.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+
+        // Ruang kamera tengah Infinix GT 10 Pro
+        Spacer(modifier = Modifier.width(cameraHoleWidth))
+
+        // Right Wing: Headphone icon (dengan cyan ring jika connect)
+        Row(
+            modifier = Modifier.weight(0.40f),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            HeadphoneSilhouetteIcon(
+                isConnected = isConnected,
+                modifier = Modifier.size(22.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun ChargerHudRow(hud: SystemHudState, cameraHoleWidth: Dp) {
+    val isConnected = hud.type == SystemHudType.CHARGER_CONNECTED
+    val accentColor = if (isConnected) DirectivePlantGreen else WallESolarAmber
+
+    Row(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 4.dp, vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.weight(1f)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(24.dp)
+                    .clip(CircleShape)
+                    .background(accentColor.copy(alpha = 0.18f)),
+                contentAlignment = Alignment.Center
+            ) {
+                LightningBoltIcon(
+                    tint = accentColor,
+                    modifier = Modifier.size(13.dp)
+                )
+            }
+
+            Column(modifier = Modifier.weight(1f, fill = false)) {
+                Text(
+                    text = hud.title,
+                    color = Color.White,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = hud.subtitle,
+                    color = accentColor,
+                    fontSize = 9.sp,
+                    maxLines = 1
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.width(cameraHoleWidth))
+
+        Row(
+            modifier = Modifier.weight(0.40f),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = if (hud.batteryLevel > 0) "${hud.batteryLevel}%" else "",
+                color = Color.White,
+                fontSize = 12.sp,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold
+            )
+        }
+    }
+}
+
+@Composable
+private fun RingerModeHudRow(hud: SystemHudState, cameraHoleWidth: Dp) {
+    val isSilent = hud.ringerModeName == "silent"
+    val isVibrate = hud.ringerModeName == "vibrate"
+    val iconColor = if (isSilent) AxiomAlertRed else if (isVibrate) WallESolarAmber else DirectivePlantGreen
+
+    Row(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 4.dp, vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.weight(1f)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(24.dp)
+                    .clip(CircleShape)
+                    .background(iconColor.copy(alpha = 0.18f)),
+                contentAlignment = Alignment.Center
+            ) {
+                RingerModeIcon(
+                    modeName = hud.ringerModeName,
+                    tint = iconColor,
+                    modifier = Modifier.size(13.dp)
+                )
+            }
+
+            Column(modifier = Modifier.weight(1f, fill = false)) {
+                Text(
+                    text = hud.title,
+                    color = Color.White,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1
+                )
+                Text(
+                    text = hud.subtitle,
+                    color = iconColor,
+                    fontSize = 9.sp,
+                    maxLines = 1
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.width(cameraHoleWidth))
+
+        Row(
+            modifier = Modifier.weight(0.40f),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(7.dp)
+                    .clip(CircleShape)
+                    .background(iconColor)
+            )
+        }
+    }
+}
+
+@Composable
+private fun BluetoothBadgeIcon(
+    isConnected: Boolean,
+    batteryLevel: Int,
+    modifier: Modifier = Modifier
+) {
+    val p1 = remember { Path() }
+    val p2 = remember { Path() }
+    Canvas(modifier = modifier) {
+        val w = size.width
+        val h = size.height
+        val strokePx = 1.8.dp.toPx()
+
+        // Ring melingkar (arc progress jika ada info baterai)
+        if (isConnected && batteryLevel in 1..100) {
+            drawCircle(
+                color = Color.White.copy(alpha = 0.12f),
+                radius = (w - strokePx) * 0.5f,
+                style = Stroke(width = strokePx)
+            )
+            val sweep = (batteryLevel / 100f) * 360f
+            drawArc(
+                color = Color(0xFF38BDF8),
+                startAngle = -90f,
+                sweepAngle = sweep,
+                useCenter = false,
+                style = Stroke(width = strokePx, cap = StrokeCap.Round)
+            )
+        } else {
+            drawCircle(
+                color = if (isConnected) EveCyanGlow.copy(alpha = 0.20f) else Color.White.copy(alpha = 0.08f),
+                radius = w * 0.5f
+            )
+            if (!isConnected) {
+                drawCircle(
+                    color = Color.White.copy(alpha = 0.14f),
+                    radius = (w - strokePx) * 0.5f,
+                    style = Stroke(width = 1.dp.toPx())
+                )
+            }
+        }
+
+        // Bluetooth Rune Icon
+        val midX = w * 0.50f
+        val topY = h * 0.22f
+        val botY = h * 0.78f
+        val rightX = w * 0.72f
+        val leftX = w * 0.32f
+        val glyphTint = if (isConnected) Color.White else Color.White.copy(alpha = 0.75f)
+        val glyphStroke = 1.5.dp.toPx()
+
+        // Garis vertikal tengah
+        drawLine(
+            color = glyphTint,
+            start = Offset(midX, topY),
+            end = Offset(midX, botY),
+            strokeWidth = glyphStroke,
+            cap = StrokeCap.Round
+        )
+
+        // Simpul diagonal atas & bawah (zero-allocation cached path)
+        p1.rewind()
+        p1.moveTo(leftX, h * 0.36f)
+        p1.lineTo(rightX, h * 0.64f)
+        p1.lineTo(midX, botY)
+        drawPath(
+            path = p1,
+            color = glyphTint,
+            style = Stroke(width = glyphStroke, cap = StrokeCap.Round, join = StrokeJoin.Round)
+        )
+
+        p2.rewind()
+        p2.moveTo(leftX, h * 0.64f)
+        p2.lineTo(rightX, h * 0.36f)
+        p2.lineTo(midX, topY)
+        drawPath(
+            path = p2,
+            color = glyphTint,
+            style = Stroke(width = glyphStroke, cap = StrokeCap.Round, join = StrokeJoin.Round)
+        )
+    }
+}
+
+@Composable
+private fun HeadphoneSilhouetteIcon(
+    isConnected: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val bandPath = remember { Path() }
+    Canvas(modifier = modifier) {
+        val w = size.width
+        val h = size.height
+
+        if (isConnected) {
+            drawCircle(
+                color = EveCyanGlow.copy(alpha = 0.32f),
+                radius = w * 0.50f,
+                style = Stroke(width = 1.2.dp.toPx())
+            )
+            drawCircle(
+                color = EveCyanGlow.copy(alpha = 0.10f),
+                radius = w * 0.44f
+            )
+        }
+
+        val hpColor = if (isConnected) Color.White else Color(0xFF94A3B8)
+        val bandStroke = 1.6.dp.toPx()
+
+        // Busur bando headphone (zero-allocation cached path)
+        bandPath.rewind()
+        bandPath.moveTo(w * 0.26f, h * 0.62f)
+        bandPath.cubicTo(
+            w * 0.26f, h * 0.22f,
+            w * 0.74f, h * 0.22f,
+            w * 0.74f, h * 0.62f
+        )
+        drawPath(
+            path = bandPath,
+            color = hpColor,
+            style = Stroke(width = bandStroke, cap = StrokeCap.Round)
+        )
+
+        // Bantalan telinga kiri
+        drawRoundRect(
+            color = hpColor,
+            topLeft = Offset(w * 0.20f, h * 0.50f),
+            size = Size(w * 0.14f, h * 0.32f),
+            cornerRadius = CornerRadius(w * 0.06f, w * 0.06f)
+        )
+
+        // Bantalan telinga kanan
+        drawRoundRect(
+            color = hpColor,
+            topLeft = Offset(w * 0.66f, h * 0.50f),
+            size = Size(w * 0.14f, h * 0.32f),
+            cornerRadius = CornerRadius(w * 0.06f, w * 0.06f)
+        )
+    }
+}
+
+@Composable
+private fun VolumeSpeakerIcon(
+    fraction: Float,
+    modifier: Modifier = Modifier
+) {
+    val bodyPath = remember { Path() }
+    Canvas(modifier = modifier) {
+        val w = size.width
+        val h = size.height
+        val color = Color.White
+
+        // Speaker cone (zero-allocation cached path)
+        bodyPath.rewind()
+        bodyPath.moveTo(w * 0.14f, h * 0.36f)
+        bodyPath.lineTo(w * 0.32f, h * 0.36f)
+        bodyPath.lineTo(w * 0.54f, h * 0.18f)
+        bodyPath.lineTo(w * 0.54f, h * 0.82f)
+        bodyPath.lineTo(w * 0.32f, h * 0.64f)
+        bodyPath.lineTo(w * 0.14f, h * 0.64f)
+        bodyPath.close()
+        drawPath(path = bodyPath, color = color)
+
+        val stroke = 1.4.dp.toPx()
+        if (fraction <= 0.01f) {
+            drawLine(
+                color = AxiomAlertRed,
+                start = Offset(w * 0.66f, h * 0.38f),
+                end = Offset(w * 0.86f, h * 0.62f),
+                strokeWidth = stroke,
+                cap = StrokeCap.Round
+            )
+            drawLine(
+                color = AxiomAlertRed,
+                start = Offset(w * 0.86f, h * 0.38f),
+                end = Offset(w * 0.66f, h * 0.62f),
+                strokeWidth = stroke,
+                cap = StrokeCap.Round
+            )
+        } else {
+            drawArc(
+                color = color,
+                startAngle = -45f,
+                sweepAngle = 90f,
+                useCenter = false,
+                topLeft = Offset(w * 0.44f, h * 0.28f),
+                size = Size(w * 0.30f, h * 0.44f),
+                style = Stroke(width = stroke, cap = StrokeCap.Round)
+            )
+
+            if (fraction > 0.40f) {
+                drawArc(
+                    color = color,
+                    startAngle = -45f,
+                    sweepAngle = 90f,
+                    useCenter = false,
+                    topLeft = Offset(w * 0.44f, h * 0.16f),
+                    size = Size(w * 0.46f, h * 0.68f),
+                    style = Stroke(width = stroke, cap = StrokeCap.Round)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun LightningBoltIcon(
+    tint: Color,
+    modifier: Modifier = Modifier
+) {
+    val bolt = remember { Path() }
+    Canvas(modifier = modifier) {
+        val w = size.width
+        val h = size.height
+        bolt.rewind()
+        bolt.moveTo(w * 0.58f, h * 0.06f)
+        bolt.lineTo(w * 0.22f, h * 0.54f)
+        bolt.lineTo(w * 0.48f, h * 0.54f)
+        bolt.lineTo(w * 0.42f, h * 0.94f)
+        bolt.lineTo(w * 0.78f, h * 0.46f)
+        bolt.lineTo(w * 0.52f, h * 0.46f)
+        bolt.close()
+        drawPath(path = bolt, color = tint)
+    }
+}
+
+@Composable
+private fun RingerModeIcon(
+    modeName: String,
+    tint: Color,
+    modifier: Modifier = Modifier
+) {
+    val bellPath = remember { Path() }
+    Canvas(modifier = modifier) {
+        val w = size.width
+        val h = size.height
+        val stroke = 1.4.dp.toPx()
+
+        if (modeName == "vibrate") {
+            drawRoundRect(
+                color = tint,
+                topLeft = Offset(w * 0.32f, h * 0.20f),
+                size = Size(w * 0.36f, h * 0.60f),
+                cornerRadius = CornerRadius(w * 0.06f, w * 0.06f),
+                style = Stroke(width = stroke)
+            )
+            drawLine(color = tint, start = Offset(w * 0.18f, h * 0.35f), end = Offset(w * 0.18f, h * 0.65f), strokeWidth = stroke, cap = StrokeCap.Round)
+            drawLine(color = tint, start = Offset(w * 0.82f, h * 0.35f), end = Offset(w * 0.82f, h * 0.65f), strokeWidth = stroke, cap = StrokeCap.Round)
+        } else {
+            bellPath.rewind()
+            bellPath.moveTo(w * 0.50f, h * 0.18f)
+            bellPath.cubicTo(w * 0.30f, h * 0.30f, w * 0.26f, h * 0.64f, w * 0.20f, h * 0.74f)
+            bellPath.lineTo(w * 0.80f, h * 0.74f)
+            bellPath.cubicTo(w * 0.74f, h * 0.64f, w * 0.70f, h * 0.30f, w * 0.50f, h * 0.18f)
+            drawPath(path = bellPath, color = tint)
+            drawCircle(color = tint, radius = w * 0.06f, center = Offset(w * 0.50f, h * 0.84f))
+
+            if (modeName == "silent") {
+                drawLine(
+                    color = AxiomAlertRed,
+                    start = Offset(w * 0.18f, h * 0.18f),
+                    end = Offset(w * 0.82f, h * 0.82f),
+                    strokeWidth = stroke * 1.2f,
+                    cap = StrokeCap.Round
+                )
+            }
+        }
+    }
 }

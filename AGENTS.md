@@ -51,3 +51,10 @@ Behavioral guidelines to reduce common LLM coding mistakes, derived from Andrej 
 **Always maintain and query the codebase graph.**
 - Always consult `graphify-out/` (`graphify query`, `graph.json`, `GRAPH_REPORT.md`) to trace call flows, data dependencies, and god nodes before making architectural changes.
 - After every significant feature addition or refactoring, automatically run `graphify update .` to keep `graph.json`, `GRAPH_REPORT.md`, and the visual map `graph.html` 100% synchronized with the latest codebase.
+
+---
+
+## 6. Build & APK Confirmation
+**Always ask for confirmation before building APK.**
+- Never push to remote / trigger GitHub Actions CI build for APK creation without explicit user confirmation.
+- Keep changes, reviews, and graphify updates local until the user instructs: "build", "buat APK", or gives approval.

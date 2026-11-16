@@ -10,8 +10,29 @@ enum class IslandMode {
     SOLAR_CHARGE,
     NOTIFICATION,
     CALL_TIMER,
-    PRAYER_ALERT
+    PRAYER_ALERT,
+    SYSTEM_HUD
 }
+
+enum class SystemHudType {
+    NONE,
+    VOLUME,
+    BLUETOOTH_CONNECTED,
+    BLUETOOTH_DISCONNECTED,
+    CHARGER_CONNECTED,
+    CHARGER_DISCONNECTED,
+    RINGER_MODE
+}
+
+data class SystemHudState(
+    val type: SystemHudType = SystemHudType.NONE,
+    val title: String = "",
+    val subtitle: String = "",
+    val valueFraction: Float = 0f,
+    val batteryLevel: Int = -1,
+    val ringerModeName: String = "",
+    val timestamp: Long = 0L
+)
 
 enum class EveMood {
     HAPPY,   // ^_^ Happy curved eyes with soft blush cheeks
@@ -154,6 +175,7 @@ data class IslandUiState(
     ),
     val stopwatch: StopwatchState = StopwatchState(),
     val prayerAlert: PrayerAlertState = PrayerAlertState(),
+    val systemHud: SystemHudState = SystemHudState(),
     val lastExpandedPage: Int = 0,
     val isOverlayServiceRunning: Boolean = false,
     val isNotificationListenerConnected: Boolean = false,
@@ -165,7 +187,7 @@ data class IslandUiState(
             (calibration.hideWhenAppOpen && isAppOpen) ||
                 isMenuOrDrawerOpen ||
                 (calibration.hideWhenMenuScrolled && isNotificationShadeOpen)
-            ) && !isExpanded && !isNotchHidden && mode != IslandMode.PRAYER_ALERT
+            ) && !isExpanded && !isNotchHidden && mode != IslandMode.PRAYER_ALERT && mode != IslandMode.SYSTEM_HUD
 
     /** Notch disembunyikan total (0dp / GONE): hanya di Lock Screen atau layar horizontal (landscape) */
     val isNotchHidden: Boolean

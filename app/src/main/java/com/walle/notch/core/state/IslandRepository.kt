@@ -28,6 +28,8 @@ import com.walle.notch.core.model.NotificationPayload
 import com.walle.notch.core.model.PrayerAlertState
 import com.walle.notch.core.model.PrayerSchedule
 import com.walle.notch.core.model.StopwatchState
+import com.walle.notch.core.model.SystemHudState
+import com.walle.notch.core.model.SystemHudType
 import com.walle.notch.core.model.TodoItem
 import com.walle.notch.service.PrayerAlarmReceiver
 import java.util.Calendar
@@ -489,6 +491,45 @@ object IslandRepository {
             if (_uiState.value.mode == IslandMode.IDLE && !_uiState.value.isAppOpen) {
                 restartEveIdleCountdown()
             }
+        }
+    }
+
+    fun postSystemHud(hud: SystemHudState, durationMs: Long = 2500L) {
+        val previousMode = _uiState.value.mode.let {
+            if (it == IslandMode.SYSTEM_HUD || it == IslandMode.NOTIFICATION) IslandMode.IDLE else it
+        }
+        _uiState.update { state ->
+            state.copy(
+                systemHud = hud,
+                mode = IslandMode.SYSTEM_HUD,
+                isExpanded = false
+            )
+        }
+        transientBannerJob?.cancel()
+        transientBannerJob = repoScope.launch {
+            delay(durationMs)
+            _uiState.update { state ->
+                if (state.mode == IslandMode.SYSTEM_HUD && !state.isExpanded) {
+                    val returnMode = if (state.music.isPlaying) IslandMode.MUSIC else previousMode
+                    state.copy(mode = returnMode)
+                } else state
+            }
+            if (_uiState.value.mode == IslandMode.IDLE && !_uiState.value.isAppOpen) {
+                restartEveIdleCountdown()
+            }
+        }
+    }
+
+    fun dismissSystemHud() {
+        transientBannerJob?.cancel()
+        _uiState.update { state ->
+            if (state.mode == IslandMode.SYSTEM_HUD) {
+                val nextMode = if (state.music.isPlaying) IslandMode.MUSIC else IslandMode.IDLE
+                state.copy(mode = nextMode, isExpanded = false)
+            } else state
+        }
+        if (_uiState.value.mode == IslandMode.IDLE && !_uiState.value.isAppOpen) {
+            restartEveIdleCountdown()
         }
     }
 
