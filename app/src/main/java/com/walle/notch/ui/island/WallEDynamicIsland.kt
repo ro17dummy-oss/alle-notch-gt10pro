@@ -112,7 +112,7 @@ private val CuteBlushPink = Color(0xFFFF7597)
 private val SoftCyanHalo = Color(0xFF00E5FF)
 
 private enum class MediaIconType {
-    PREV, PLAY, PAUSE, NEXT, RESET
+    PREV, PLAY, PAUSE, NEXT, RESET, LYRICS, SPEAKER
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -550,74 +550,73 @@ private fun IdleModuleContent(
                 .padding(top = 8.dp, bottom = 6.dp, start = 8.dp, end = 8.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            // Header Bar Minimalis & Elegan (Tanpa tulisan EVE, Tanpa tombol silang ✕)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            // Header Bar Minimalis & Elegan untuk Tab 1, 2, 3 (Tab 0 Musik mandiri lapang tanpa header ganda)
+            if (activeTab != 0) {
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    val headerTitle = when (activeTab) {
-                        0 -> "Musik"
-                        1 -> "Jadwal Sholat"
-                        2 -> "Catatan"
-                        else -> "Stopwatch"
-                    }
-                    val headerColor = when (activeTab) {
-                        0 -> EveCyanGlow
-                        1 -> Color(0xFF38BDF8)
-                        2 -> WallESolarAmber
-                        else -> DirectivePlantGreen
-                    }
-                    val headerSubtitle = when (activeTab) {
-                        0 -> if (state.music.isPlaying) "Sedang Diputar" else "Standby"
-                        1 -> state.prayer.cityName
-                        2 -> "${state.todoList.count { it.isDone }}/${state.todoList.size} selesai"
-                        else -> if (state.stopwatch.isRunning) "Berjalan" else "Siap"
-                    }
-                    Box(
-                        modifier = Modifier
-                            .size(6.dp)
-                            .clip(CircleShape)
-                            .background(headerColor)
-                    )
-                    Text(
-                        text = headerTitle,
-                        color = Color.White,
-                        fontSize = 11.5.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        letterSpacing = 0.3.sp
-                    )
-                    Text(
-                        text = "· $headerSubtitle",
-                        color = Color.White.copy(alpha = 0.45f),
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Normal
-                    )
-                }
-
-                if (activeTab == 2) {
-                    // Tombol Tambah Catatan Minimalis di Kanan Header
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(Color.White.copy(alpha = 0.10f))
-                            .clickable {
-                                isAddingTodo = !isAddingTodo
-                                onRequestKeyboardFocus?.invoke(isAddingTodo)
-                            }
-                            .padding(horizontal = 8.dp, vertical = 3.dp),
-                        contentAlignment = Alignment.Center
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Text(
-                            text = if (isAddingTodo) "Batal" else "+ Tambah",
-                            color = if (isAddingTodo) WallESolarAmber else Color.White,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Medium
+                        val headerTitle = when (activeTab) {
+                            1 -> "Jadwal Sholat"
+                            2 -> "Catatan"
+                            else -> "Stopwatch"
+                        }
+                        val headerColor = when (activeTab) {
+                            1 -> Color(0xFF38BDF8)
+                            2 -> WallESolarAmber
+                            else -> DirectivePlantGreen
+                        }
+                        val headerSubtitle = when (activeTab) {
+                            1 -> state.prayer.cityName
+                            2 -> "${state.todoList.count { it.isDone }}/${state.todoList.size} selesai"
+                            else -> if (state.stopwatch.isRunning) "Berjalan" else "Siap"
+                        }
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .clip(CircleShape)
+                                .background(headerColor)
                         )
+                        Text(
+                            text = headerTitle,
+                            color = Color.White,
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            letterSpacing = 0.3.sp
+                        )
+                        Text(
+                            text = "· $headerSubtitle",
+                            color = Color.White.copy(alpha = 0.45f),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Normal
+                        )
+                    }
+
+                    if (activeTab == 2) {
+                        // Tombol Tambah Catatan Minimalis di Kanan Header
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color.White.copy(alpha = 0.10f))
+                                .clickable {
+                                    isAddingTodo = !isAddingTodo
+                                    onRequestKeyboardFocus?.invoke(isAddingTodo)
+                                }
+                                .padding(horizontal = 8.dp, vertical = 3.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = if (isAddingTodo) "Batal" else "+ Tambah",
+                                color = if (isAddingTodo) WallESolarAmber else Color.White,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
                     }
                 }
             }
@@ -628,97 +627,142 @@ private fun IdleModuleContent(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    .padding(vertical = 4.dp)
+                    .padding(vertical = if (activeTab == 0) 0.dp else 4.dp)
             ) { page ->
                 when (page) {
                     0 -> {
-                        // KARTU 0: Pemutar Musik (Sesuai referensi gambar user, tanpa header jam & tanpa balon lirik)
-                        Row(
+                        // KARTU 0: Pemutar Musik (Sesuai referensi gambar user: lapang, tanpa dummy, tanpa jam/tanggal)
+                        Box(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .fillMaxHeight(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                .fillMaxSize()
+                                .padding(horizontal = 2.dp),
+                            contentAlignment = Alignment.Center
                         ) {
-                            // Album Art Squircle di Kiri (Tap untuk buka aplikasi musik)
-                            Box(
-                                modifier = Modifier
-                                    .size(54.dp)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(Color(0xFF1E222A))
-                                    .clickable {
-                                        IslandRepository.openMusicApp(context)
-                                    },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                if (state.music.albumArt != null) {
-                                    Image(
-                                        bitmap = state.music.albumArt.asImageBitmap(),
-                                        contentDescription = "Cover",
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentScale = ContentScale.Crop
-                                    )
-                                } else {
-                                    Canvas(modifier = Modifier.size(22.dp)) {
-                                        drawCircle(
-                                            color = EveCyanGlow.copy(alpha = 0.8f),
-                                            radius = size.minDimension * 0.44f,
-                                            style = Stroke(width = 2.dp.toPx())
-                                        )
-                                        drawCircle(
-                                            color = WallESolarAmber,
-                                            radius = size.minDimension * 0.14f
-                                        )
-                                    }
-                                }
-                            }
-
-                            // Bagian Kanan: Judul, Seekbar, Tombol Kontrol
                             Column(
                                 modifier = Modifier
-                                    .weight(1f)
-                                    .fillMaxHeight(),
+                                    .fillMaxSize()
+                                    .padding(vertical = 2.dp),
                                 verticalArrangement = Arrangement.SpaceBetween
                             ) {
-                                // Judul & Artis (Tap untuk buka aplikasi musik)
-                                Column(
-                                    modifier = Modifier.clickable {
-                                        IslandRepository.openMusicApp(context)
-                                    }
+                                // 1. Row Atas: Squircle Cover + Judul Lagu & Artis (Lega & Tanpa Data Dummy)
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 14.dp, vertical = 2.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                                 ) {
-                                    Text(
-                                        text = if (state.music.title.isNotBlank()) state.music.title else "Not Playing",
-                                        color = Color.White,
-                                        fontSize = 12.5.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    Text(
-                                        text = if (state.music.artist.isNotBlank()) state.music.artist else "Tap cover untuk buka musik",
-                                        color = Color(0xFF94A3B8),
-                                        fontSize = 9.5.sp,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
+                                    // Album Art Squircle di Kiri (Tap untuk buka aplikasi musik)
+                                    Box(
+                                        modifier = Modifier
+                                            .size(50.dp)
+                                            .clip(RoundedCornerShape(14.dp))
+                                            .background(Color(0xFF181A20))
+                                            .clickable {
+                                                IslandRepository.openMusicApp(context)
+                                            },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        if (state.music.albumArt != null) {
+                                            Image(
+                                                bitmap = state.music.albumArt.asImageBitmap(),
+                                                contentDescription = "Cover",
+                                                modifier = Modifier.fillMaxSize(),
+                                                contentScale = ContentScale.Crop
+                                            )
+                                        } else {
+                                            // Vector Musical Note (♫) murni sesuai referensi gambar user
+                                            Canvas(modifier = Modifier.size(24.dp)) {
+                                                val w = size.width
+                                                val h = size.height
+                                                // Left stem
+                                                drawLine(
+                                                    color = Color(0xFFCBD5E1),
+                                                    start = Offset(w * 0.30f, h * 0.22f),
+                                                    end = Offset(w * 0.30f, h * 0.72f),
+                                                    strokeWidth = 2.2.dp.toPx(),
+                                                    cap = StrokeCap.Round
+                                                )
+                                                // Right stem
+                                                drawLine(
+                                                    color = Color(0xFFCBD5E1),
+                                                    start = Offset(w * 0.74f, h * 0.14f),
+                                                    end = Offset(w * 0.74f, h * 0.64f),
+                                                    strokeWidth = 2.2.dp.toPx(),
+                                                    cap = StrokeCap.Round
+                                                )
+                                                // Top connecting beam
+                                                drawLine(
+                                                    color = Color(0xFFCBD5E1),
+                                                    start = Offset(w * 0.30f, h * 0.22f),
+                                                    end = Offset(w * 0.74f, h * 0.14f),
+                                                    strokeWidth = 3.2.dp.toPx(),
+                                                    cap = StrokeCap.Square
+                                                )
+                                                // Left note head
+                                                drawOval(
+                                                    color = Color(0xFFCBD5E1),
+                                                    topLeft = Offset(w * 0.14f, h * 0.62f),
+                                                    size = Size(w * 0.26f, h * 0.20f)
+                                                )
+                                                // Right note head
+                                                drawOval(
+                                                    color = Color(0xFFCBD5E1),
+                                                    topLeft = Offset(w * 0.58f, h * 0.54f),
+                                                    size = Size(w * 0.26f, h * 0.20f)
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    // Bagian Kanan: Judul & Artis (Tanpa teks dummy)
+                                    Column(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clickable {
+                                                IslandRepository.openMusicApp(context)
+                                            },
+                                        verticalArrangement = Arrangement.Center
+                                    ) {
+                                        Text(
+                                            text = if (state.music.title.isNotBlank()) state.music.title else "Not Playing",
+                                            color = Color.White,
+                                            fontSize = 14.5.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        if (state.music.artist.isNotBlank()) {
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            Text(
+                                                text = state.music.artist,
+                                                color = Color(0xFF94A3B8),
+                                                fontSize = 10.5.sp,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                    }
                                 }
 
-                                // Seekbar Progress Line (Tap untuk loncat durasi): 00:00 --- [Bar] --- -03:45
+                                // 2. Row Tengah: Seekbar Progress Line (00:00 --- [Bar] --- -00:00)
                                 Row(
-                                    modifier = Modifier.fillMaxWidth(),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 14.dp),
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
                                     Text(
                                         text = formatDuration(state.music.positionMs),
-                                        color = Color(0xFF94A3B8),
-                                        fontSize = 8.5.sp,
+                                        color = Color.White.copy(alpha = 0.55f),
+                                        fontSize = 9.sp,
                                         fontFamily = FontFamily.Monospace
                                     )
                                     Box(
                                         modifier = Modifier
                                             .weight(1f)
-                                            .height(10.dp)
+                                            .height(12.dp)
                                             .pointerInput(state.music.durationMs) {
                                                 detectTapGestures { offset ->
                                                     if (size.width > 0 && state.music.durationMs > 0L) {
@@ -734,11 +778,11 @@ private fun IdleModuleContent(
                                                 .fillMaxWidth()
                                                 .height(3.dp)
                                                 .clip(CircleShape)
-                                                .background(Color.White.copy(alpha = 0.15f))
+                                                .background(Color.White.copy(alpha = 0.16f))
                                         ) {
-                                            val progressFraction = if (state.music.durationMs > 0) {
+                                            val progressFraction = if (state.music.durationMs > 0L) {
                                                 (state.music.positionMs.toFloat() / state.music.durationMs).coerceIn(0f, 1f)
-                                            } else 0.35f
+                                            } else 0f
                                             Box(
                                                 modifier = Modifier
                                                     .fillMaxHeight()
@@ -747,65 +791,121 @@ private fun IdleModuleContent(
                                             )
                                         }
                                     }
-                                    val remainingMs = (state.music.durationMs - state.music.positionMs).coerceAtLeast(0L)
+                                    val remainingMs = if (state.music.durationMs > 0L) {
+                                        (state.music.durationMs - state.music.positionMs).coerceAtLeast(0L)
+                                    } else 0L
                                     Text(
-                                        text = "-${formatDuration(remainingMs)}",
-                                        color = Color(0xFF94A3B8),
-                                        fontSize = 8.5.sp,
+                                        text = if (state.music.durationMs > 0L) "-${formatDuration(remainingMs)}" else "-00:00",
+                                        color = Color.White.copy(alpha = 0.55f),
+                                        fontSize = 9.sp,
                                         fontFamily = FontFamily.Monospace
                                     )
                                 }
 
-                                // Kontrol Bawah: Vector Canvas Media Controls (⏮, ▶/⏸, ⏭) & Audio Output
+                                // 3. Row Bawah: [💬" (Lyrics)] ---- [⏮  ▶/❚❚  ⏭] ---- [🔊 (Speaker)]
                                 Row(
-                                    modifier = Modifier.fillMaxWidth(),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 14.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
-                                    Spacer(modifier = Modifier.width(36.dp)) // Penyeimbang kiri
+                                    // Ikon Balon Lirik (Pasif tanpa aksi untuk saat ini sesuai permintaan user)
+                                    MediaIconButton(
+                                        iconType = MediaIconType.LYRICS,
+                                        bg = Color.Transparent,
+                                        fg = Color.White.copy(alpha = 0.55f),
+                                        modifier = Modifier.size(28.dp),
+                                        iconSize = 14.dp
+                                    ) {
+                                        // Pasif / tanpa aksi untuk saat ini
+                                    }
 
-                                    // Tombol Media Vektor Canvas Tengah (Jaminan 100% muncul & tajam di semua device)
+                                    // Tombol Media Vektor Canvas Tengah (⏮, ▶/❚❚, ⏭)
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                        horizontalArrangement = Arrangement.spacedBy(16.dp)
                                     ) {
                                         MediaIconButton(
                                             iconType = MediaIconType.PREV,
-                                            bg = Color.White.copy(alpha = 0.12f),
-                                            fg = Color.White,
-                                            modifier = Modifier.size(26.dp),
-                                            iconSize = 10.dp
+                                            bg = Color.Transparent,
+                                            fg = Color(0xFFCBD5E1),
+                                            modifier = Modifier.size(28.dp),
+                                            iconSize = 14.dp
                                         ) {
                                             IslandRepository.mediaPrevious(context)
                                         }
 
                                         MediaIconButton(
                                             iconType = if (state.music.isPlaying) MediaIconType.PAUSE else MediaIconType.PLAY,
-                                            bg = if (state.music.isPlaying) EveCyanGlow else Color.White.copy(alpha = 0.22f),
-                                            fg = if (state.music.isPlaying) PitchBlack else Color.White,
-                                            modifier = Modifier.size(28.dp),
-                                            iconSize = 11.dp
+                                            bg = Color.Transparent,
+                                            fg = Color.White,
+                                            modifier = Modifier.size(30.dp),
+                                            iconSize = 16.dp
                                         ) {
                                             IslandRepository.mediaPlayPause(context)
                                         }
 
                                         MediaIconButton(
                                             iconType = MediaIconType.NEXT,
-                                            bg = Color.White.copy(alpha = 0.12f),
-                                            fg = Color.White,
-                                            modifier = Modifier.size(26.dp),
-                                            iconSize = 10.dp
+                                            bg = Color.Transparent,
+                                            fg = Color(0xFFCBD5E1),
+                                            modifier = Modifier.size(28.dp),
+                                            iconSize = 14.dp
                                         ) {
                                             IslandRepository.mediaNext(context)
                                         }
                                     }
 
+                                    // Ikon Speaker / Output Audio
+                                    MediaIconButton(
+                                        iconType = MediaIconType.SPEAKER,
+                                        bg = Color.Transparent,
+                                        fg = Color.White.copy(alpha = 0.65f),
+                                        modifier = Modifier.size(28.dp),
+                                        iconSize = 14.dp
+                                    ) {
+                                        IslandRepository.openMusicApp(context)
+                                    }
+                                }
+                            }
+
+                            // Side Chevrons ‹ dan › di sisi kiri & kanan kartu
+                            if (pagerState.currentPage > 0) {
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.CenterStart)
+                                        .clickable {
+                                            coroutineScope.launch {
+                                                pagerState.animateScrollToPage(pagerState.currentPage - 1)
+                                            }
+                                        }
+                                        .padding(horizontal = 2.dp, vertical = 6.dp)
+                                ) {
                                     Text(
-                                        text = state.music.outputDeviceName.take(8),
-                                        color = EveCyanGlow.copy(alpha = 0.75f),
-                                        fontSize = 8.5.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        maxLines = 1
+                                        text = "‹",
+                                        color = Color.White.copy(alpha = 0.30f),
+                                        fontSize = 18.sp,
+                                        fontWeight = FontWeight.Light
+                                    )
+                                }
+                            }
+                            if (pagerState.currentPage < 3) {
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.CenterEnd)
+                                        .clickable {
+                                            coroutineScope.launch {
+                                                pagerState.animateScrollToPage(pagerState.currentPage + 1)
+                                            }
+                                        }
+                                        .padding(horizontal = 2.dp, vertical = 6.dp)
+                                ) {
+                                    Text(
+                                        text = "›",
+                                        color = Color.White.copy(alpha = 0.30f),
+                                        fontSize = 18.sp,
+                                        fontWeight = FontWeight.Light
                                     )
                                 }
                             }
@@ -1131,17 +1231,17 @@ private fun IdleModuleContent(
                 for (i in 0..3) {
                     val isSelected = i == activeTab
                     val dotWidth by animateDpAsState(
-                        targetValue = if (isSelected) 14.dp else 4.dp,
+                        targetValue = if (isSelected) 16.dp else 4.dp,
                         label = "tabDotW"
                     )
                     Box(
                         modifier = Modifier
                             .padding(horizontal = 2.dp)
-                            .height(3.5.dp)
+                            .height(3.dp)
                             .width(dotWidth)
                             .clip(CircleShape)
                             .background(
-                                if (isSelected) EveCyanGlow.copy(alpha = 0.9f)
+                                if (isSelected) Color.White
                                 else Color.White.copy(alpha = 0.25f)
                             )
                             .clickable {
@@ -1736,7 +1836,11 @@ private fun MusicModuleContent(state: IslandUiState) {
                     }
                 }
                 Text(
-                    text = "${music.title} • ${music.artist}",
+                    text = when {
+                        music.title.isNotBlank() && music.artist.isNotBlank() -> "${music.title} • ${music.artist}"
+                        music.title.isNotBlank() -> music.title
+                        else -> "Not Playing"
+                    },
                     color = Color.White,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold,
@@ -1895,7 +1999,7 @@ private fun MusicModuleContent(state: IslandUiState) {
                     verticalArrangement = Arrangement.Center
                 ) {
                     Text(
-                        text = music.title,
+                        text = if (music.title.isNotBlank()) music.title else "Not Playing",
                         color = Color.White,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
@@ -1903,15 +2007,17 @@ private fun MusicModuleContent(state: IslandUiState) {
                         style = TextStyle(platformStyle = PlatformTextStyle(includeFontPadding = false)),
                         modifier = Modifier.basicMarquee()
                     )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = music.artist,
-                        color = EveCyanGlow.copy(alpha = 0.85f),
-                        fontSize = 11.sp,
-                        maxLines = 1,
-                        style = TextStyle(platformStyle = PlatformTextStyle(includeFontPadding = false)),
-                        modifier = Modifier.basicMarquee()
-                    )
+                    if (music.artist.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = music.artist,
+                            color = EveCyanGlow.copy(alpha = 0.85f),
+                            fontSize = 11.sp,
+                            maxLines = 1,
+                            style = TextStyle(platformStyle = PlatformTextStyle(includeFontPadding = false)),
+                            modifier = Modifier.basicMarquee()
+                        )
+                    }
                 }
             }
 
@@ -2104,6 +2210,58 @@ private fun MediaIconButton(
                     cachedPath.lineTo(w * 0.40f, h * 0.38f)
                     cachedPath.close()
                     drawPath(path = cachedPath, color = fg)
+                }
+                MediaIconType.LYRICS -> {
+                    val r = 2.5.dp.toPx()
+                    drawRoundRect(
+                        color = fg,
+                        topLeft = Offset(w * 0.12f, h * 0.14f),
+                        size = Size(w * 0.76f, h * 0.58f),
+                        cornerRadius = CornerRadius(r, r)
+                    )
+                    cachedPath.rewind()
+                    cachedPath.moveTo(w * 0.24f, h * 0.70f)
+                    cachedPath.lineTo(w * 0.15f, h * 0.88f)
+                    cachedPath.lineTo(w * 0.42f, h * 0.70f)
+                    cachedPath.close()
+                    drawPath(path = cachedPath, color = fg)
+                    drawLine(
+                        color = PitchBlack,
+                        start = Offset(w * 0.35f, h * 0.34f),
+                        end = Offset(w * 0.35f, h * 0.52f),
+                        strokeWidth = 1.8.dp.toPx(),
+                        cap = StrokeCap.Round
+                    )
+                    drawLine(
+                        color = PitchBlack,
+                        start = Offset(w * 0.63f, h * 0.34f),
+                        end = Offset(w * 0.63f, h * 0.52f),
+                        strokeWidth = 1.8.dp.toPx(),
+                        cap = StrokeCap.Round
+                    )
+                }
+                MediaIconType.SPEAKER -> {
+                    drawRect(
+                        color = fg,
+                        topLeft = Offset(w * 0.14f, h * 0.36f),
+                        size = Size(w * 0.22f, h * 0.28f)
+                    )
+                    cachedPath.rewind()
+                    cachedPath.moveTo(w * 0.36f, h * 0.36f)
+                    cachedPath.lineTo(w * 0.62f, h * 0.16f)
+                    cachedPath.lineTo(w * 0.62f, h * 0.84f)
+                    cachedPath.lineTo(w * 0.36f, h * 0.64f)
+                    cachedPath.close()
+                    drawPath(path = cachedPath, color = fg)
+                    drawArc(
+                        color = fg,
+                        startAngle = -45f,
+                        sweepAngle = 90f,
+                        useCenter = false,
+                        topLeft = Offset(w * 0.46f, h * 0.24f),
+                        size = Size(w * 0.40f, h * 0.52f),
+                        style = Stroke(width = 1.8.dp.toPx(), cap = StrokeCap.Round)
+                    )
                 }
             }
         }

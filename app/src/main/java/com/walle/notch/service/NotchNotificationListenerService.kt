@@ -103,12 +103,8 @@ class NotchNotificationListenerService : NotificationListenerService() {
         val outputName = IslandRepository.resolveAudioOutputName(this)
         val controller = activeController
         if (controller == null) {
-            IslandRepository.updateMusic { prev ->
-                prev.copy(
-                    isPlaying = false,
-                    packageName = "",
-                    outputDeviceName = outputName
-                )
+            IslandRepository.updateMusic {
+                MusicState(outputDeviceName = outputName)
             }
             return
         }
@@ -116,12 +112,9 @@ class NotchNotificationListenerService : NotificationListenerService() {
         val playback = controller.playbackState
 
         val isPlaying = playback?.state == PlaybackState.STATE_PLAYING
-        val title = metadata?.getString(MediaMetadata.METADATA_KEY_TITLE)
-            ?.takeIf { it.isNotBlank() } ?: "Put On Your Sunday Clothes"
-        val artist = metadata?.getString(MediaMetadata.METADATA_KEY_ARTIST)
-            ?.takeIf { it.isNotBlank() } ?: "Wall-E Archive Tape"
-        val duration = metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION)
-            ?.takeIf { it > 0L } ?: 194_000L
+        val title = metadata?.getString(MediaMetadata.METADATA_KEY_TITLE)?.trim().orEmpty()
+        val artist = metadata?.getString(MediaMetadata.METADATA_KEY_ARTIST)?.trim().orEmpty()
+        val duration = metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION)?.coerceAtLeast(0L) ?: 0L
         val rawPos = playback?.position?.coerceAtLeast(0L) ?: 0L
         val elapsedSinceUpdate = if (isPlaying && playback != null && playback.lastPositionUpdateTime > 0L) {
             val speed = if (playback.playbackSpeed > 0f) playback.playbackSpeed else 1f

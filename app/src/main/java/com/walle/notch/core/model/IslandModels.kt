@@ -79,13 +79,13 @@ data class IslandCalibration(
 
 data class MusicState(
     val isPlaying: Boolean = false,
-    val title: String = "Put On Your Sunday Clothes",
-    val artist: String = "Wall-E Archive Tape",
+    val title: String = "",
+    val artist: String = "",
     val packageName: String = "",
     val albumArt: Bitmap? = null,
-    val durationMs: Long = 194_000L,
-    val positionMs: Long = 78_000L,
-    val outputDeviceName: String = "EVE Audio"
+    val durationMs: Long = 0L,
+    val positionMs: Long = 0L,
+    val outputDeviceName: String = ""
 )
 
 data class NotificationPayload(
@@ -166,13 +166,7 @@ data class IslandUiState(
     val battery: BatteryTelemetry = BatteryTelemetry(),
     val callTimer: CallTimerState = CallTimerState(),
     val prayer: PrayerSchedule = PrayerSchedule(),
-    val todoList: List<TodoItem> = listOf(
-        TodoItem(1, "Beli charger 45W GT 10 Pro", false),
-        TodoItem(2, "Review update Wall-E Notch", true),
-        TodoItem(3, "Backup data game", false),
-        TodoItem(4, "Aktifkan bypass charging saat gaming", false),
-        TodoItem(5, "Cek jadwal sholat hari ini", false)
-    ),
+    val todoList: List<TodoItem> = emptyList(),
     val stopwatch: StopwatchState = StopwatchState(),
     val prayerAlert: PrayerAlertState = PrayerAlertState(),
     val systemHud: SystemHudState = SystemHudState(),
