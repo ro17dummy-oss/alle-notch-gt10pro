@@ -16,6 +16,7 @@ import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.view.KeyEvent
 import com.walle.notch.core.model.IslandMode
+import com.walle.notch.core.model.MusicState
 import com.walle.notch.core.model.NotificationPayload
 import com.walle.notch.core.state.IslandRepository
 
